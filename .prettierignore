@@ -1,0 +1,9 @@
+dist
+build
+coverage
+node_modules
+venv
+.venv
+postgres_data
+redis_data
+ollama_data
