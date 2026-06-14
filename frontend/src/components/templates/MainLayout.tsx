@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom"
 import { Sidebar } from "../organisms/Sidebar"
 import { Topbar } from "../organisms/Topbar"
+import { CommandPalette } from "../layout/CommandPalette"
 
 export function MainLayout() {
   return (
@@ -12,6 +13,7 @@ export function MainLayout() {
           <Outlet />
         </main>
       </div>
+      <CommandPalette />
     </div>
   )
 }

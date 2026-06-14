@@ -43,8 +43,13 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
+import { insightsRouter } from './api/routes/insights.js';
+import { proposalsRouter } from './api/routes/proposals.js';
+
 // API Routes
 app.use('/api/discovery', discoveryRoutes);
+app.use('/api/insights', insightsRouter);
+app.use('/api/proposals', proposalsRouter);
 
 // Start server
 app.listen(PORT, () => {
