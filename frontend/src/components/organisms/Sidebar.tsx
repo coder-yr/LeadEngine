@@ -8,13 +8,17 @@ import {
   Target, 
   Activity, 
   Settings,
-  ChevronLeft
+  ChevronLeft,
+  Kanban,
+  ClipboardList
 } from "lucide-react"
 
 const navItems = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Leads", href: "/leads", icon: Users },
   { name: "Companies", href: "/companies", icon: Building2 },
+  { name: "Pipeline", href: "/pipeline", icon: Kanban },
+  { name: "Tasks", href: "/tasks", icon: ClipboardList },
   { name: "Campaigns", href: "/campaigns", icon: Target },
   { name: "Activities", href: "/activities", icon: Activity },
 ]
@@ -53,11 +57,11 @@ export function Sidebar() {
               key={item.name}
               to={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-[0.4rem] px-3 py-2 text-sm font-medium transition-all duration-200",
                 isActive 
-                  ? "bg-primary/10 text-primary" 
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                !sidebarOpen && "justify-center px-0"
+                  ? "bg-primary/10 text-primary shadow-[inset_2px_0_0_0_hsl(var(--primary))]" 
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                !sidebarOpen && "justify-center px-0 shadow-none"
               )}
               title={!sidebarOpen ? item.name : undefined}
             >
@@ -73,11 +77,11 @@ export function Sidebar() {
         <Link
           to="/settings"
           className={cn(
-            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            "flex items-center gap-3 rounded-[0.4rem] px-3 py-2 text-sm font-medium transition-all duration-200",
             location.pathname.startsWith("/settings") 
-              ? "bg-primary/10 text-primary" 
-              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-            !sidebarOpen && "justify-center px-0"
+              ? "bg-primary/10 text-primary shadow-[inset_2px_0_0_0_hsl(var(--primary))]" 
+              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+            !sidebarOpen && "justify-center px-0 shadow-none"
           )}
           title={!sidebarOpen ? "Settings" : undefined}
         >

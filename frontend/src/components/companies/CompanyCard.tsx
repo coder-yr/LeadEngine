@@ -1,4 +1,5 @@
 import { Company } from "@/types/company";
+import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,7 @@ export function CompanyCard({ company }: CompanyCardProps) {
   );
 
   return (
-    <Card className="overflow-hidden hover:border-primary/30 transition-colors group">
+    <Card className="overflow-hidden border-border/50 shadow-sm hover:shadow-md transition-all duration-200 group bg-card">
       <CardContent className="p-0">
         <div className="flex flex-col lg:flex-row">
           
@@ -134,9 +135,11 @@ export function CompanyCard({ company }: CompanyCardProps) {
             </div>
 
             <div className="mt-6 flex justify-end">
-              <Button variant="ghost" className="text-primary hover:text-primary hover:bg-primary/10 gap-1 group-hover:underline">
-                View Full Profile
-                <ChevronRight className="w-4 h-4" />
+              <Button variant="ghost" className="text-primary hover:text-primary hover:bg-primary/10 gap-1 group-hover:underline" asChild>
+                <Link to={`/companies/${company.id}`}>
+                  View Full Profile
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
               </Button>
             </div>
           </div>

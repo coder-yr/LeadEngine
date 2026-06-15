@@ -1,35 +1,36 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { ThemeProvider } from "./components/ThemeProvider"
-import { MainLayout } from "./components/templates/MainLayout"
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
+import { MainLayout } from './components/templates/MainLayout';
+import Dashboard from './pages/Dashboard';
+import Companies from './pages/Companies';
+import Leads from './pages/Leads';
+import Settings from './pages/Settings';
+import Activities from './pages/Activities';
+import Campaigns from './pages/Campaigns';
+import CompanyDetails from './pages/CompanyDetails';
+import Pipeline from './pages/Pipeline';
+import Tasks from './pages/Tasks';
 
-// Pages
-import Dashboard from "./pages/Dashboard"
-import Leads from "./pages/Leads"
-import Companies from "./pages/Companies"
-import Campaigns from "./pages/Campaigns"
-import Activities from "./pages/Activities"
-import Settings from "./pages/Settings"
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <MainLayout />,
+    children: [
+      { path: '/', element: <Navigate to="/dashboard" replace /> },
+      { path: '/dashboard', element: <Dashboard /> },
+      { path: '/companies', element: <Companies /> },
+      { path: '/companies/:id', element: <CompanyDetails /> },
+      { path: '/pipeline', element: <Pipeline /> },
+      { path: '/tasks', element: <Tasks /> },
+      { path: '/leads', element: <Leads /> },
+      { path: '/activities', element: <Activities /> },
+      { path: '/campaigns', element: <Campaigns /> },
+      { path: '/settings', element: <Settings /> },
+    ],
+  },
+]);
 
-const queryClient = new QueryClient()
-
-export default function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<MainLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="leads" element={<Leads />} />
-              <Route path="companies" element={<Companies />} />
-              <Route path="campaigns" element={<Campaigns />} />
-              <Route path="activities" element={<Activities />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </ThemeProvider>
-    </QueryClientProvider>
-  )
+export function App() {
+  return <RouterProvider router={router} />;
 }
+
+export default App;

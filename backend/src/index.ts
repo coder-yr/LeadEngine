@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import discoveryRoutes from './api/routes/discovery.routes.js';
+import './orchestration/index.js'; // Initialize queues and scalable workers
+import { bullBoardAdapter } from './orchestration/BullBoard.js';
 
 /**
  * LeadEngine Backend API
@@ -43,13 +45,28 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-import { insightsRouter } from './api/routes/insights.js';
-import { proposalsRouter } from './api/routes/proposals.js';
+import contactRoutes from './api/routes/contact.routes.js';
+import signalsRoutes from './api/routes/signals.routes.js';
+import companiesRoutes from './api/routes/companies.routes.js';
+import tasksRoutes from './api/routes/tasks.routes.js';
+import campaignsRoutes from './api/routes/campaigns.routes.js';
+import analyticsRoutes from './api/routes/analytics.routes.js';
+import proposalsRoutes from './api/routes/proposals.routes.js';
+import agentRoutes from './api/routes/agent.routes.js';
 
 // API Routes
 app.use('/api/discovery', discoveryRoutes);
-app.use('/api/insights', insightsRouter);
-app.use('/api/proposals', proposalsRouter);
+app.use('/api/contacts', contactRoutes);
+app.use('/api/signals', signalsRoutes);
+app.use('/api/companies', companiesRoutes);
+app.use('/api/tasks', tasksRoutes);
+app.use('/api/campaigns', campaignsRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/proposals', proposalsRoutes);
+app.use('/api/agent', agentRoutes);
+
+// Admin Dashboard for BullMQ
+app.use('/admin/queues', bullBoardAdapter.getRouter());
 
 // Start server
 app.listen(PORT, () => {

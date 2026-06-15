@@ -14,11 +14,11 @@ export function Topbar() {
   return (
     <header className="h-14 border-b border-border bg-card flex items-center justify-between px-4 sticky top-0 z-10">
       <div className="flex-1 flex items-center max-w-md relative">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input 
           type="search" 
           placeholder="Search leads, companies (Ctrl+K)..." 
-          className="pl-9 bg-background/50 border-border focus-visible:ring-primary/50 rounded-full h-9"
+          className="pl-9 bg-muted/40 border-border/50 focus-visible:ring-primary/50 rounded-md h-9 shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] transition-all hover:bg-background"
         />
       </div>
 

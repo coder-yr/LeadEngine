@@ -61,4 +61,89 @@ export class CompanyRepository {
 
     return data;
   }
+
+  /**
+   * Get all companies with their intelligence and pipeline stage
+   */
+  async getAllCompanies() {
+    const { data, error } = await supabase
+      .from('companies')
+      .select(`
+        *,
+        company_intelligence (
+          lead_score,
+          digital_maturity_score,
+          services_needed,
+          website_score,
+          crm_detected,
+          whatsapp_detected,
+          booking_detected,
+          social_profiles
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching companies:', error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  /**
+   * Update the pipeline stage for a company
+   */
+  async updatePipelineStage(companyId: string, stage: string) {
+    const { data, error } = await supabase
+      .from('companies')
+      .update({ pipeline_stage: stage })
+      .eq('id', companyId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error updating pipeline stage for company ${companyId}:`, error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  /**
+   * Get a single company by ID with full intelligence
+   */
+  async getCompanyById(companyId: string) {
+    const { data, error } = await supabase
+      .from('companies')
+      .select(`
+        *,
+        company_intelligence (
+          lead_score,
+          digital_maturity_score,
+          services_needed,
+          website_score,
+          crm_detected,
+          whatsapp_detected,
+          booking_detected,
+          social_profiles
+        ),
+        company_signals (
+          intent_score,
+          signals
+        ),
+        websites (*),
+        contacts (*),
+        activities (*)
+      `)
+      .eq('id', companyId)
+      .single();
+
+    if (error) {
+      console.error(`Error fetching company ${companyId}:`, error);
+      throw error;
+    }
+
+    return data;
+  }
 }
