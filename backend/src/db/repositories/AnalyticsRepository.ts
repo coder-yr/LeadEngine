@@ -46,7 +46,7 @@ export class AnalyticsRepository {
       .select('intent_score, companies(name)');
 
     let avgOppScore = 0;
-    let opportunityScores = [];
+    let opportunityScores: {name: string, score: number}[] = [];
     if (signals && signals.length > 0) {
       avgOppScore = signals.reduce((sum, s) => sum + (s.intent_score || 0), 0) / signals.length;
       opportunityScores = signals.map(s => ({
@@ -60,7 +60,7 @@ export class AnalyticsRepository {
       .from('contact_intelligence')
       .select('decision_maker_score, contacts(first_name, last_name)');
       
-    let leadScores = [];
+    let leadScores: {name: string, score: number}[] = [];
     if (contactIntel && contactIntel.length > 0) {
       leadScores = contactIntel.map(c => ({
         name: `${(c.contacts as any)?.first_name} ${(c.contacts as any)?.last_name}`,

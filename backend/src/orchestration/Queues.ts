@@ -34,6 +34,16 @@ export const buyingSignalsQueue = new Queue('buying-signals-queue', {
   ...sharedQueueOptions,
 });
 
+export const contactDiscoveryQueue = new Queue('contact-discovery-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const leadScoringQueue = new Queue('lead-scoring-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
 export const outreachQueue = new Queue('outreach-engine-queue', {
   connection: redisConfig,
   ...sharedQueueOptions,
@@ -53,6 +63,14 @@ export const failedInsightsQueue = new Queue('failed-insights', {
 });
 
 export const failedBuyingSignalsQueue = new Queue('failed-buying-signals', {
+  connection: redisConfig,
+});
+
+export const failedContactDiscoveryQueue = new Queue('failed-contact-discovery', {
+  connection: redisConfig,
+});
+
+export const failedLeadScoringQueue = new Queue('failed-lead-scoring', {
   connection: redisConfig,
 });
 

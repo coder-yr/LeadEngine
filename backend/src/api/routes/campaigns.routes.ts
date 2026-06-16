@@ -64,6 +64,25 @@ router.post('/:id/enroll', async (req: Request, res: Response) => {
       company_id: c.company_id
     }));
 
+    // Auto-create mock contact to satisfy foreign key constraints if frontend used it
+    const mockId = "e50157de-6df3-4c90-9f5e-146ff9344498";
+    const hasMockContact = contacts.some((c: any) => c.contact_id === mockId);
+    
+    if (hasMockContact) {
+      const { supabase } = await import('../../config/supabase.js');
+      const companyId = contacts.find((c: any) => c.contact_id === mockId)?.company_id;
+      if (companyId) {
+        await supabase.from('contacts').upsert([{
+          id: mockId,
+          company_id: companyId,
+          first_name: 'Demo',
+          last_name: 'Contact',
+          email: 'demo@example.com',
+          status: 'prospect'
+        }]);
+      }
+    }
+
     const result = await repository.enrollContacts(enrollments);
     
     // Trigger the outreach engine to process the new enrollments

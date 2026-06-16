@@ -1,20 +1,24 @@
 import { Router } from 'express';
-import { DiscoveryController } from '../controllers/discovery.controller.js';
-import { getQueueMonitoringData } from '../../orchestration/Monitor.js';
+import { DiscoveryJobsController } from '../controllers/discovery-jobs.controller.js';
+import { BulkAnalyzeController } from '../controllers/bulk-analyze.controller.js';
 
 const router = Router();
 
-// Define discovery routes
-router.post('/search', DiscoveryController.search);
+// Job Management & Searching
+router.post('/search', DiscoveryJobsController.startDiscovery);
+router.get('/jobs', DiscoveryJobsController.getJobs);
+router.get('/jobs/:id', DiscoveryJobsController.getJobById);
+router.delete('/jobs/:id', DiscoveryJobsController.deleteJob);
+router.get('/jobs/:id/results', DiscoveryJobsController.getJobResults);
 
-// Monitoring route for pipeline
-router.get('/monitoring', async (req, res) => {
-  const data = await getQueueMonitoringData();
-  if (data.status === 'error') {
-    res.status(500).json(data);
-  } else {
-    res.status(200).json(data);
-  }
-});
+// Statistics
+router.get('/stats', DiscoveryJobsController.getStats);
+
+// Bulk Actions
+router.post('/bulk-analyze', BulkAnalyzeController.bulkAnalyze);
+
+// Exports
+router.get('/export/:id', DiscoveryJobsController.exportCSV);
+router.get('/export/:id/xlsx', DiscoveryJobsController.exportXLSX);
 
 export default router;

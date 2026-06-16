@@ -130,7 +130,12 @@ export class CompanyRepository {
         ),
         company_signals (
           intent_score,
-          signals
+          no_website,
+          no_crm,
+          no_whatsapp,
+          poor_seo,
+          slow_website,
+          no_booking_system
         ),
         websites (*),
         contacts (*),

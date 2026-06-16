@@ -22,10 +22,14 @@ export class AgentService {
           crm_detected,
           whatsapp_detected,
           booking_detected,
-          social_profiles,
-          pain_points,
-          opportunities,
-          ai_insight
+          social_profiles
+        ),
+        company_ai_insights (
+          summary,
+          opportunity_score,
+          services_needed,
+          reasoning,
+          recommended_next_action
         )
       `)
       .eq('id', companyId)
@@ -36,6 +40,7 @@ export class AgentService {
     }
 
     const intel = company.company_intelligence?.[0] || {};
+    const insight = company.company_ai_insights?.[0] || {};
     
     // 2. Build System Prompt
     const systemPrompt = `You are an elite B2B AI Sales Assistant for LeadEngine. 
@@ -48,15 +53,15 @@ Context about the target company:
 - Website: ${company.website_url || 'Unknown'}
 - Lead Score: ${intel.lead_score || 'N/A'}
 - Digital Maturity: ${intel.digital_maturity_score || 'N/A'}
-- Recommended Services: ${(intel.services_needed || []).join(', ')}
-- Pain Points: ${(intel.pain_points || []).join(', ')}
-- Opportunities: ${(intel.opportunities || []).join(', ')}
+- Recommended Services: ${(insight.services_needed || intel.services_needed || []).join(', ')}
+- AI Summary: ${insight.summary || 'N/A'}
+- Next Actions: ${insight.recommended_next_action || 'N/A'}
 
 Guidelines:
 - If asked to write an email, write ONLY the email body and subject line. Do not include boilerplate intro/outro text outside the email.
 - If asked to write a WhatsApp message, keep it short, casual but professional, and use appropriate emojis.
-- If asked for a proposal summary, synthesize the pain points and opportunities.
-- If asked for next actions, provide 2-3 concrete bullet points based on their digital maturity.`;
+- If asked for a proposal summary, synthesize the AI summary and recommended next actions.
+- If asked for next actions, provide 2-3 concrete bullet points based on their digital maturity and AI insights.`;
 
     // 3. Call Ollama
     try {

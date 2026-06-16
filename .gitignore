@@ -41,10 +41,12 @@ backend/dist/
 backend/node_modules/
 
 # Workers
-workers/__pycache__/
 workers/.pytest_cache/
 workers/.mypy_cache/
 workers/node_modules/
+**/__pycache__/
+*.pyc
+**/*.pyc
 
 # Logs
 logs/

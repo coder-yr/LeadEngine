@@ -10,11 +10,13 @@ import {
   Settings,
   ChevronLeft,
   Kanban,
-  ClipboardList
+  ClipboardList,
+  Search
 } from "lucide-react"
 
 const navItems = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Discovery", href: "/discovery", icon: Search },
   { name: "Leads", href: "/leads", icon: Users },
   { name: "Companies", href: "/companies", icon: Building2 },
   { name: "Pipeline", href: "/pipeline", icon: Kanban },

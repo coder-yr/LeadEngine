@@ -9,6 +9,7 @@ import Campaigns from './pages/Campaigns';
 import CompanyDetails from './pages/CompanyDetails';
 import Pipeline from './pages/Pipeline';
 import Tasks from './pages/Tasks';
+import Discovery from './pages/Discovery';
 
 const router = createBrowserRouter([
   {
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
       { path: '/leads', element: <Leads /> },
       { path: '/activities', element: <Activities /> },
       { path: '/campaigns', element: <Campaigns /> },
+      { path: '/discovery', element: <Discovery /> },
       { path: '/settings', element: <Settings /> },
     ],
   },

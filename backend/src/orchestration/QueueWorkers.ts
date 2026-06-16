@@ -7,10 +7,14 @@ import {
   websiteAuditQueue, 
   aiInsightsQueue, 
   buyingSignalsQueue,
+  contactDiscoveryQueue,
+  leadScoringQueue,
   failedIntelligenceQueue, 
   failedAuditQueue, 
   failedInsightsQueue,
   failedBuyingSignalsQueue,
+  failedContactDiscoveryQueue,
+  failedLeadScoringQueue,
   outreachQueue
 } from './Queues.js';
 
@@ -21,6 +25,8 @@ import { AiInsightsService } from '../workers/ai-insights/AiInsightsService.js';
 import { AiInsightsRepository } from '../workers/ai-insights/AiInsightsRepository.js';
 import { BuyingSignalsService } from '../workers/buying-signals/BuyingSignalsService.js';
 import { outreachWorker } from '../workers/outreach/OutreachEngineWorker.js';
+import { ContactDiscoveryService } from '../services/ContactDiscoveryService.js';
+import { LeadScoringService } from '../services/LeadScoringService.js';
 import { Ollama } from 'ollama';
 
 // We import outreachWorker here to ensure it initializes and starts processing.
@@ -48,9 +54,9 @@ export const intelligenceWorker = new Worker(
     const intelligenceService = new IntelligenceService();
     const result = await intelligenceService.analyzeCompany(companyId);
     
-    // Explicit Chaining
-    logger.info({ companyId }, 'Intelligence analysis completed, queuing audit');
-    await websiteAuditQueue.add('audit-website', { companyId, traceId });
+    // Chain to Contact Discovery
+    logger.info({ companyId }, 'Intelligence analysis completed, queuing contact discovery');
+    await contactDiscoveryQueue.add('discover-contacts', { companyId, traceId });
     
     return result;
   },
@@ -62,6 +68,35 @@ intelligenceWorker.on('failed', async (job, err) => {
     const { logger } = createTraceLogger(job.data.traceId);
     logger.error({ err, companyId: job.data.companyId }, 'Intelligence job failed permanently. Moving to DLQ.');
     await failedIntelligenceQueue.add('failed-intelligence', job.data);
+  }
+});
+
+// 2. Contact Discovery Worker
+export const contactDiscoveryWorker = new Worker(
+  'contact-discovery-queue',
+  async (job: Job<{ companyId: string; traceId: string }>) => {
+    const { companyId, traceId } = job.data;
+    const { logger } = createTraceLogger(traceId);
+    
+    logger.info({ companyId }, 'Starting contact discovery');
+    
+    const contactDiscoveryService = new ContactDiscoveryService();
+    const contactsCreated = await contactDiscoveryService.discoverContacts(companyId);
+    
+    // Chain to Website Audit
+    logger.info({ companyId, contactsCreated }, 'Contact discovery completed, queuing website audit');
+    await websiteAuditQueue.add('audit-website', { companyId, traceId });
+    
+    return { contactsCreated };
+  },
+  workerOptions
+);
+
+contactDiscoveryWorker.on('failed', async (job, err) => {
+  if (job && job.attemptsMade === job.opts.attempts) {
+    const { logger } = createTraceLogger(job.data.traceId);
+    logger.error({ err, companyId: job.data.companyId }, 'Contact Discovery job failed permanently. Moving to DLQ.');
+    await failedContactDiscoveryQueue.add('failed-contact-discovery', job.data);
   }
 });
 
@@ -126,7 +161,10 @@ export const aiInsightsWorker = new Worker(
     const model = job.data.model || process.env.OLLAMA_MODEL || 'qwen3:8b';
     const result = await aiInsightsService.generateInsight(companyId, model);
     
-    logger.info({ companyId }, 'AI insights generation completed. Orchestration workflow finished.');
+    // Chain to Lead Scoring (final step)
+    logger.info({ companyId }, 'AI insights generation completed, queuing lead scoring');
+    await leadScoringQueue.add('score-lead', { companyId, traceId });
+    
     return result;
   },
   workerOptions
@@ -137,6 +175,35 @@ aiInsightsWorker.on('failed', async (job, err) => {
     const { logger } = createTraceLogger(job.data.traceId);
     logger.error({ err, companyId: job.data.companyId }, 'AI Insights job failed permanently. Moving to DLQ.');
     await failedInsightsQueue.add('failed-insights', job.data);
+  }
+});
+
+// 6. Lead Scoring Worker (Final step in pipeline)
+export const leadScoringWorker = new Worker(
+  'lead-scoring-queue',
+  async (job: Job<{ companyId: string; traceId: string }>) => {
+    const { companyId, traceId } = job.data;
+    const { logger } = createTraceLogger(traceId);
+    
+    logger.info({ companyId }, 'Starting lead scoring');
+    
+    const leadScoringService = new LeadScoringService();
+    const scores = await leadScoringService.scoreCompany(companyId);
+    
+    logger.info(
+      { companyId, ...scores },
+      'Lead scoring completed. Full orchestration pipeline finished.'
+    );
+    return scores;
+  },
+  workerOptions
+);
+
+leadScoringWorker.on('failed', async (job, err) => {
+  if (job && job.attemptsMade === job.opts.attempts) {
+    const { logger } = createTraceLogger(job.data.traceId);
+    logger.error({ err, companyId: job.data.companyId }, 'Lead Scoring job failed permanently. Moving to DLQ.');
+    await failedLeadScoringQueue.add('failed-lead-scoring', job.data);
   }
 });
 

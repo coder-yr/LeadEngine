@@ -1,0 +1,213 @@
+import { distance as levenshteinDistance } from 'fastest-levenshtein';
+
+export interface RawDiscoveryRecord {
+  id: string;
+  raw_name?: string;
+  raw_phone?: string;
+  raw_website?: string;
+  raw_address?: string;
+  source: string;
+  [key: string]: any;
+}
+
+export interface DedupResult {
+  uniqueRecords: RawDiscoveryRecord[];
+  duplicatePairs: { resultId: string; duplicateOfId: string }[];
+  totalRaw: number;
+  totalAfterDedup: number;
+}
+
+const SIMILARITY_THRESHOLD = 0.85;
+
+/**
+ * Normalize a phone number for comparison.
+ * Strips all non-digit characters and returns the last 10 digits.
+ */
+function normalizePhone(phone: string | undefined | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 7) return null;
+  // Take last 10 digits (strips country code)
+  return digits.slice(-10);
+}
+
+/**
+ * Extract the domain from a URL for comparison.
+ */
+function extractDomain(url: string | undefined | null): string | null {
+  if (!url) return null;
+  try {
+    let normalized = url.trim().toLowerCase();
+    if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+      normalized = 'https://' + normalized;
+    }
+    const urlObj = new URL(normalized);
+    return urlObj.hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Calculate similarity ratio between two strings (0 to 1).
+ * Uses Levenshtein distance normalized by the max string length.
+ */
+function similarityRatio(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const cleanA = a.trim().toLowerCase();
+  const cleanB = b.trim().toLowerCase();
+  if (cleanA === cleanB) return 1;
+  const maxLen = Math.max(cleanA.length, cleanB.length);
+  if (maxLen === 0) return 1;
+  const dist = levenshteinDistance(cleanA, cleanB);
+  return 1 - dist / maxLen;
+}
+
+export class DeduplicationService {
+  /**
+   * Deduplicate a list of raw discovery records.
+   *
+   * Algorithm:
+   * 1. Group by normalized phone number (exact match)
+   * 2. Group remaining by website domain (exact match)
+   * 3. Fuzzy-match remaining by business name (85% threshold)
+   * 4. For each duplicate group, keep the most complete record
+   */
+  deduplicate(records: RawDiscoveryRecord[]): DedupResult {
+    if (records.length === 0) {
+      return { uniqueRecords: [], duplicatePairs: [], totalRaw: 0, totalAfterDedup: 0 };
+    }
+
+    const totalRaw = records.length;
+    const duplicatePairs: { resultId: string; duplicateOfId: string }[] = [];
+
+    // Track which records are already matched
+    const matched = new Set<string>();
+    // Map: canonical record ID -> group of record IDs
+    const groups: Map<string, string[]> = new Map();
+
+    // Pre-compute normalized values
+    const phoneMap = new Map<string, string[]>();   // normalizedPhone -> recordIds
+    const domainMap = new Map<string, string[]>();   // domain -> recordIds
+    const phoneForRecord = new Map<string, string | null>();
+    const domainForRecord = new Map<string, string | null>();
+
+    for (const record of records) {
+      const phone = normalizePhone(record.raw_phone);
+      const domain = extractDomain(record.raw_website);
+      phoneForRecord.set(record.id, phone);
+      domainForRecord.set(record.id, domain);
+
+      if (phone) {
+        if (!phoneMap.has(phone)) phoneMap.set(phone, []);
+        phoneMap.get(phone)!.push(record.id);
+      }
+      if (domain) {
+        if (!domainMap.has(domain)) domainMap.set(domain, []);
+        domainMap.get(domain)!.push(record.id);
+      }
+    }
+
+    // Step 1: Group by phone
+    for (const [, ids] of phoneMap) {
+      if (ids.length > 1) {
+        const canonical = this.pickCanonical(ids, records);
+        const groupIds = ids.filter(id => id !== canonical);
+        groups.set(canonical, [...(groups.get(canonical) || []), ...groupIds]);
+        for (const id of ids) {
+          matched.add(id);
+        }
+      }
+    }
+
+    // Step 2: Group remaining by domain
+    for (const [, ids] of domainMap) {
+      const unmatched = ids.filter(id => !matched.has(id));
+      if (unmatched.length > 1) {
+        const canonical = this.pickCanonical(unmatched, records);
+        const groupIds = unmatched.filter(id => id !== canonical);
+        groups.set(canonical, [...(groups.get(canonical) || []), ...groupIds]);
+        for (const id of unmatched) {
+          matched.add(id);
+        }
+      }
+    }
+
+    // Step 3: Fuzzy name match on remaining unmatched
+    const remainingRecords = records.filter(r => !matched.has(r.id));
+    const nameMatched = new Set<string>();
+
+    for (let i = 0; i < remainingRecords.length; i++) {
+      if (nameMatched.has(remainingRecords[i].id)) continue;
+
+      const group: string[] = [remainingRecords[i].id];
+
+      for (let j = i + 1; j < remainingRecords.length; j++) {
+        if (nameMatched.has(remainingRecords[j].id)) continue;
+
+        const nameA = remainingRecords[i].raw_name || '';
+        const nameB = remainingRecords[j].raw_name || '';
+        if (nameA && nameB && similarityRatio(nameA, nameB) >= SIMILARITY_THRESHOLD) {
+          group.push(remainingRecords[j].id);
+          nameMatched.add(remainingRecords[j].id);
+        }
+      }
+
+      if (group.length > 1) {
+        const canonical = this.pickCanonical(group, records);
+        const duplicates = group.filter(id => id !== canonical);
+        groups.set(canonical, [...(groups.get(canonical) || []), ...duplicates]);
+        nameMatched.add(remainingRecords[i].id);
+      }
+    }
+
+    // Build duplicate pairs
+    for (const [canonicalId, dupeIds] of groups) {
+      for (const dupeId of dupeIds) {
+        duplicatePairs.push({ resultId: dupeId, duplicateOfId: canonicalId });
+      }
+    }
+
+    // Build unique records list
+    const duplicateIds = new Set(duplicatePairs.map(p => p.resultId));
+    const uniqueRecords = records.filter(r => !duplicateIds.has(r.id));
+
+    return {
+      uniqueRecords,
+      duplicatePairs,
+      totalRaw,
+      totalAfterDedup: uniqueRecords.length,
+    };
+  }
+
+  /**
+   * Pick the "best" (most complete) record from a group to be the canonical.
+   * Scores records by number of non-null fields.
+   */
+  private pickCanonical(ids: string[], allRecords: RawDiscoveryRecord[]): string {
+    const recordMap = new Map(allRecords.map(r => [r.id, r]));
+
+    let bestId = ids[0];
+    let bestScore = 0;
+
+    for (const id of ids) {
+      const record = recordMap.get(id);
+      if (!record) continue;
+
+      let score = 0;
+      if (record.raw_name) score += 2;
+      if (record.raw_phone) score += 3;
+      if (record.raw_email) score += 3;
+      if (record.raw_website) score += 2;
+      if (record.raw_address) score += 1;
+      if (record.raw_rating) score += 1;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestId = id;
+      }
+    }
+
+    return bestId;
+  }
+}
