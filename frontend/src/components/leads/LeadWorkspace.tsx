@@ -16,34 +16,36 @@ export function LeadWorkspace() {
         const res = await axios.get("http://localhost:3000/api/companies");
         
         // Map companies to the expected Lead structure
-        const mappedLeads = res.data.map((dbCompany: any) => ({
-          id: dbCompany.id,
-          name: dbCompany.name,
-          title: "Unknown",
-          company: dbCompany.name,
-          email: dbCompany.email || `contact@${dbCompany.website_url}`,
-          status: dbCompany.pipeline_stage === 'Discovered' ? 'New' : 'Qualified',
-          intelligence: {
-            digitalMaturityScore: dbCompany.company_intelligence?.[0]?.digital_maturity_score || 0,
-            servicesNeeded: dbCompany.company_intelligence?.[0]?.services_needed || ["SEO"],
-            leadScore: dbCompany.company_intelligence?.[0]?.lead_score || 0,
-            aiInsights: dbCompany.company_intelligence?.[0]?.ai_insight || "No insights generated yet."
-          },
-          audit: {
-            url: dbCompany.website_url,
-            seoScore: dbCompany.company_intelligence?.[0]?.website_score || 0,
-            mobileFriendly: true,
-            sslEnabled: true,
-            pageSpeedEstimate: 85,
-            hasContactForm: dbCompany.company_intelligence?.[0]?.booking_detected || false,
-            hasWhatsAppWidget: dbCompany.company_intelligence?.[0]?.whatsapp_detected || false,
-            socialLinksFound: dbCompany.company_intelligence?.[0]?.social_profiles || [],
-            auditSummary: "Dynamic audit retrieved.",
-            issues: [],
-            auditedAt: dbCompany.created_at
-          },
-          activities: []
-        }));
+        const mappedLeads = res.data.map((dbCompany: any) => {
+          const auditData = dbCompany.website_audits?.[0] || {};
+          return {
+            id: dbCompany.id,
+            name: dbCompany.contacts?.[0]?.first_name ? `${dbCompany.contacts[0].first_name} ${dbCompany.contacts[0].last_name}` : "Unknown Contact",
+            title: dbCompany.contacts?.[0]?.title || "Unknown Title",
+            company: dbCompany.name,
+            email: dbCompany.contacts?.[0]?.email || `contact@${dbCompany.website_url?.replace(/^https?:\/\//, '')}`,
+            intelligence: {
+              digitalMaturityScore: dbCompany.company_intelligence?.[0]?.digital_maturity_score || 0,
+              aiInsights: "Insights are generated dynamically on the server.",
+              servicesNeeded: dbCompany.company_intelligence?.[0]?.services_needed || [],
+              leadScore: dbCompany.company_intelligence?.[0]?.lead_score || 0
+            },
+            audit: {
+              url: dbCompany.website_url,
+              seoScore: auditData.seo_score || 0,
+              mobileFriendly: auditData.mobile_friendly ?? false,
+              sslEnabled: auditData.ssl_enabled ?? false,
+              pageSpeedEstimate: auditData.page_speed_estimate || 0,
+              hasContactForm: auditData.has_contact_form ?? false,
+              hasWhatsAppWidget: auditData.has_whatsapp_widget ?? false,
+              socialLinksFound: auditData.social_links_found || [],
+              auditSummary: auditData.audit_summary || "Audit pending or not available.",
+              issues: auditData.issues || [],
+              auditedAt: auditData.audited_at || dbCompany.created_at
+            },
+            activities: dbCompany.activities || []
+          };
+        });
 
         setLeads(mappedLeads);
         if (mappedLeads.length > 0) setSelectedLeadId(mappedLeads[0].id);

@@ -115,7 +115,7 @@ class TestJustDialPhoneDecode:
         from justdial_scraper import _decode_justdial_phone
 
         # 9876543210
-        classes = "ycb Bcb vcb scb pcb mcb jcb gcb dcb acb"
+        classes = "Bcb ycb vcb scb pcb mcb jcb gcb dcb acb"
         result = _decode_justdial_phone(classes)
         assert result == "9876543210"
 

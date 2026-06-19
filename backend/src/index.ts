@@ -2,23 +2,22 @@ import 'dotenv/config';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import discoveryRoutes from './api/routes/discovery.routes.js';
-import './orchestration/index.js'; // Initialize queues and scalable workers
-import { bullBoardAdapter } from './orchestration/BullBoard.js';
+import analyticsRoutes from './api/routes/analytics.routes.js';
+import campaignsRoutes from './api/routes/campaigns.routes.js';
+import companiesRoutes from './api/routes/companies.routes.js';
+import contactRoutes from './api/routes/contact.routes.js';
+import listsRoutes from './api/routes/lists.routes.js';
+import proposalsRoutes from './api/routes/proposals.routes.js';
+import signalsRoutes from './api/routes/signals.routes.js';
+import tasksRoutes from './api/routes/tasks.routes.js';
+import agentRoutes from './api/routes/agent.routes.js';
+import searchRoutes from './api/routes/search.routes.js';
+import trackingRoutes from './api/routes/tracking.routes.js';
 
-/**
- * LeadEngine Backend API
- *
- * This is the main entry point for the backend application.
- *
- * TODO (Phase 1):
- * - Setup environment variables
- * - Connect to Supabase
- * - Setup Redis connection
- * - Implement database migrations
- * - Create authentication middleware
- * - Setup error handling
- * - Create API routes
- */
+// Initialize background workers
+import('./orchestration/QueueWorkers.js').catch(err => {
+  console.error("FATAL ERROR IMPORTING WORKERS:", err);
+});
 
 const app: Express = express();
 const PORT = process.env.PORT || 3000;
@@ -45,28 +44,19 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-import contactRoutes from './api/routes/contact.routes.js';
-import signalsRoutes from './api/routes/signals.routes.js';
-import companiesRoutes from './api/routes/companies.routes.js';
-import tasksRoutes from './api/routes/tasks.routes.js';
-import campaignsRoutes from './api/routes/campaigns.routes.js';
-import analyticsRoutes from './api/routes/analytics.routes.js';
-import proposalsRoutes from './api/routes/proposals.routes.js';
-import agentRoutes from './api/routes/agent.routes.js';
-
 // API Routes
 app.use('/api/discovery', discoveryRoutes);
-app.use('/api/contacts', contactRoutes);
-app.use('/api/signals', signalsRoutes);
-app.use('/api/companies', companiesRoutes);
-app.use('/api/tasks', tasksRoutes);
-app.use('/api/campaigns', campaignsRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/campaigns', campaignsRoutes);
+app.use('/api/companies', companiesRoutes);
+app.use('/api/contacts', contactRoutes);
+app.use('/api/lists', listsRoutes);
 app.use('/api/proposals', proposalsRoutes);
+app.use('/api/signals', signalsRoutes);
+app.use('/api/tasks', tasksRoutes);
 app.use('/api/agent', agentRoutes);
-
-// Admin Dashboard for BullMQ
-app.use('/admin/queues', bullBoardAdapter.getRouter());
+app.use('/api/search', searchRoutes);
+app.use('/api/tracking', trackingRoutes);
 
 // Start server
 app.listen(PORT, () => {

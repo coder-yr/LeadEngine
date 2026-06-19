@@ -89,7 +89,7 @@ export const contactDiscoveryWorker = new Worker(
     
     return { contactsCreated };
   },
-  workerOptions
+  { ...workerOptions, concurrency: 1 } // Hard limit to 1 to prevent Playwright/Ollama overload
 );
 
 contactDiscoveryWorker.on('failed', async (job, err) => {
@@ -124,8 +124,34 @@ export const websiteAuditWorker = new Worker(
     }
     
     const auditService = new AuditService();
+    const auditStartTime = Date.now();
     const result = await auditService.auditWebsite(url);
     await auditRepository.saveAuditResult(companyId, result);
+    const auditEndTime = Date.now();
+    
+    // Save extracted company info back to the companies table if present
+    if (result.extractedCompanyInfo) {
+      const updateData: any = {};
+      if (result.extractedCompanyInfo.city) updateData.city = result.extractedCompanyInfo.city;
+      if (result.extractedCompanyInfo.state_province) updateData.state_province = result.extractedCompanyInfo.state_province;
+      if (result.extractedCompanyInfo.country) updateData.country = result.extractedCompanyInfo.country;
+      if (result.extractedCompanyInfo.employee_count) updateData.employee_count = result.extractedCompanyInfo.employee_count;
+      if (result.extractedCompanyInfo.industry) updateData.industry = result.extractedCompanyInfo.industry;
+      if (result.extractedCompanyInfo.description) updateData.description = result.extractedCompanyInfo.description;
+      
+      if (Object.keys(updateData).length > 0) {
+        await supabase.from('companies').update(updateData).eq('id', companyId);
+        logger.info({ companyId, updateData }, 'Updated company details from LLM extraction');
+      }
+    }
+
+    console.log('\n--- WEBSITE AUDIT REPORT ---');
+    console.log(`Company ID: ${companyId}`);
+    console.log(`Website: ${url}`);
+    console.log(`Audit Started: ${new Date(auditStartTime).toISOString()}`);
+    console.log(`Audit Completed: ${new Date(auditEndTime).toISOString()}`);
+    console.log(`Audit Saved: Yes`);
+    console.log('---------------------------------\n');
     
     // Explicit Chaining
     logger.info({ companyId }, 'Website audit completed, queuing buying signals engine');
@@ -167,7 +193,7 @@ export const aiInsightsWorker = new Worker(
     
     return result;
   },
-  workerOptions
+  { ...workerOptions, concurrency: 1 } // Hard limit to 1 to prevent Ollama timeouts
 );
 
 aiInsightsWorker.on('failed', async (job, err) => {
@@ -235,3 +261,24 @@ buyingSignalsWorker.on('failed', async (job, err) => {
     await failedBuyingSignalsQueue.add('failed-buying-signals', job.data);
   }
 });
+
+// Helper to attach lifecycle logs to all workers
+function attachLifecycleLogs(worker: Worker, stageName: string) {
+  worker.on('active', (job) => {
+    console.log(`[STAGE: ${stageName}] Job Started - JobId: ${job.id}, Company: ${job.data.companyId}`);
+  });
+  worker.on('completed', (job) => {
+    console.log(`[STAGE: ${stageName}] Job Completed - JobId: ${job.id}, Company: ${job.data.companyId}`);
+  });
+  worker.on('failed', (job, err) => {
+    console.log(`[STAGE: ${stageName}] Job Failed - JobId: ${job?.id}, Company: ${job?.data?.companyId}. Error: ${err.message}`);
+  });
+}
+
+attachLifecycleLogs(intelligenceWorker, 'Intelligence');
+attachLifecycleLogs(contactDiscoveryWorker, 'Contact Discovery');
+attachLifecycleLogs(websiteAuditWorker, 'Website Audit');
+attachLifecycleLogs(aiInsightsWorker, 'AI Insights');
+attachLifecycleLogs(leadScoringWorker, 'Lead Scoring');
+attachLifecycleLogs(buyingSignalsWorker, 'Buying Signals');
+

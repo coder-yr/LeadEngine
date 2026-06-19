@@ -198,4 +198,75 @@ export class CampaignRepository {
         .eq('id', campaignId);
     }
   }
+
+  async trackMessageOpen(messageId: string) {
+    // 1. Mark message as read
+    const { data: message, error: msgError } = await supabase
+      .from('messages')
+      .update({ is_read: true, opened_at: new Date().toISOString() })
+      .eq('id', messageId)
+      .select()
+      .single();
+
+    if (msgError) {
+      console.error('Error tracking message open:', msgError);
+      throw msgError;
+    }
+
+    if (!message) return null;
+
+    // 2. Increment aggregate opened_count
+    await this.incrementCampaignStat(message.campaign_id, 'opened_count', 1);
+
+    // 3. Log activity
+    await supabase.from('activities').insert([{
+      company_id: message.company_id,
+      contact_id: message.contact_id,
+      campaign_id: message.campaign_id,
+      message_id: message.id,
+      activity_type: 'email_opened',
+      description: 'Prospect opened the email.'
+    }]);
+
+    return message;
+  }
+
+  async trackMessageReply(messageId: string, replyBody?: string) {
+    // 1. Mark message as replied
+    const { data: message, error: msgError } = await supabase
+      .from('messages')
+      .update({ is_replied: true, replied_at: new Date().toISOString() })
+      .eq('id', messageId)
+      .select()
+      .single();
+
+    if (msgError) {
+      console.error('Error tracking message reply:', msgError);
+      throw msgError;
+    }
+
+    if (!message) return null;
+
+    // 2. Increment aggregate replied_count
+    await this.incrementCampaignStat(message.campaign_id, 'replied_count', 1);
+
+    // 3. Log activity
+    await supabase.from('activities').insert([{
+      company_id: message.company_id,
+      contact_id: message.contact_id,
+      campaign_id: message.campaign_id,
+      message_id: message.id,
+      activity_type: 'note_added',
+      description: 'Prospect replied to the message.'
+    }]);
+
+    // 4. Update the enrollment status to 'replied' (which pauses the sequence)
+    await supabase
+      .from('campaign_enrollments')
+      .update({ status: 'replied' })
+      .eq('campaign_id', message.campaign_id)
+      .eq('contact_id', message.contact_id);
+
+    return message;
+  }
 }

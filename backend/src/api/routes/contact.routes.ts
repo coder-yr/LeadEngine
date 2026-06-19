@@ -16,10 +16,11 @@ router.post('/', async (req: Request, res: Response) => {
 
     const newContact = await contactService.processContact({
       company_id: contactData.company_id,
-      name: contactData.name,
+      first_name: contactData.first_name || contactData.name?.split(' ')[0] || 'Unknown',
+      last_name: contactData.last_name || contactData.name?.split(' ').slice(1).join(' ') || '-',
       title: contactData.title || null,
       department: contactData.department || null,
-      linkedin: contactData.linkedin || null,
+      linkedin_url: contactData.linkedin_url || contactData.linkedin || null,
       email: contactData.email || null,
       phone: contactData.phone || null
     });

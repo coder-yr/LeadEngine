@@ -9,11 +9,21 @@ interface WebsiteAuditTabProps {
 }
 
 export function WebsiteAuditTab({ audit }: WebsiteAuditTabProps) {
-  if (!audit) {
+  if (!audit || audit.auditedAt === "6/17/2026" || !audit.auditSummary || audit.auditSummary === "Audit pending") {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-        <LayoutDashboard className="w-12 h-12 mb-4 opacity-20" />
-        <p>No website audit has been run for this lead yet.</p>
+      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground animate-in fade-in duration-500">
+        <div className="relative mb-6">
+          <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse"></div>
+          <LayoutDashboard className="w-12 h-12 text-primary animate-pulse relative z-10" />
+        </div>
+        <h3 className="text-lg font-medium text-foreground mb-2">AI Audit in Progress</h3>
+        <p className="text-sm max-w-md text-center">
+          Our AI agents are currently browsing the web to analyze this company's digital presence. This process involves deep crawling and LLM analysis, so it may take a few minutes if there's a queue.
+        </p>
+        <div className="mt-6 flex items-center gap-2 text-xs font-mono bg-muted px-3 py-1.5 rounded-full">
+          <span className="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+          Waiting for background workers...
+        </div>
       </div>
     );
   }

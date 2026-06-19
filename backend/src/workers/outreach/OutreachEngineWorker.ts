@@ -2,8 +2,10 @@ import { Worker, Job } from 'bullmq';
 import { redisConfig } from '../../config/redis.js';
 import { CampaignRepository } from '../../db/repositories/CampaignRepository.js';
 import { failedOutreachQueue } from '../../orchestration/Queues.js';
+import { OutreachCommunicationService } from '../../services/OutreachCommunicationService.js';
 
 const repository = new CampaignRepository();
+const commsService = new OutreachCommunicationService();
 
 export const outreachWorker = new Worker(
   'outreach-engine-queue',
@@ -33,17 +35,21 @@ export const outreachWorker = new Worker(
           continue;
         }
 
-        // 2. Generate Message and Activity
+        // 2. Generate Message and Activity Placeholder
         const contactId = enrollment.contact_id;
         const companyId = enrollment.company_id;
         const campaignId = enrollment.campaign_id;
         
-        // Personalize body (rudimentary simulation)
+        // Personalize body
         const contactName = enrollment.contacts?.first_name || 'there';
+        const contactEmail = enrollment.contacts?.email || 'test@example.com';
+        const contactPhone = enrollment.contacts?.phone || '+1234567890';
+        
         const body = step.template_body.replace('{{name}}', contactName);
         const subject = step.template_subject ? step.template_subject.replace('{{name}}', contactName) : null;
 
-        await repository.recordMessageAndActivity(
+        // Create the message database record first to get the unique messageId
+        const messageRecord = await repository.recordMessageAndActivity(
           campaignId,
           contactId,
           companyId,
@@ -52,21 +58,36 @@ export const outreachWorker = new Worker(
           body
         );
 
-        // 3. Update Aggregate Metrics (Simulate Send/Open/Click randomly to showcase UI)
-        await repository.incrementCampaignStat(campaignId, 'sent_count', 1);
+        if (!messageRecord) throw new Error('Failed to create message record');
 
-        // Randomly simulate opens/replies to make dashboard look alive
-        const rand = Math.random();
-        if (rand > 0.5) await repository.incrementCampaignStat(campaignId, 'opened_count', 1);
-        if (rand > 0.7) await repository.incrementCampaignStat(campaignId, 'clicked_count', 1);
-        if (rand > 0.9) {
-          await repository.incrementCampaignStat(campaignId, 'replied_count', 1);
-          // Auto-pause if replied
-          await repository.updateEnrollment(enrollment.id, { status: 'replied' });
+        // 3. Dispatch the communication
+        let sendSuccess = false;
+        if (step.channel === 'email') {
+          sendSuccess = await commsService.sendEmail(
+            messageRecord.id,
+            contactId,
+            contactEmail,
+            subject || 'No Subject',
+            body
+          );
+        } else if (step.channel === 'whatsapp') {
+          sendSuccess = await commsService.sendWhatsApp(
+            messageRecord.id,
+            contactId,
+            contactPhone,
+            body
+          );
+        } else {
+          // Other channels (e.g. LinkedIn)
+          console.log(`[OutreachEngine] Simulating LinkedIn message to ${contactName}`);
+          sendSuccess = true;
         }
 
-        // 4. Update Enrollment State
-        if (enrollment.status === 'active') { // Check if it wasn't replied to above
+        if (sendSuccess) {
+          // Update Aggregate Metrics (Sent)
+          await repository.incrementCampaignStat(campaignId, 'sent_count', 1);
+
+          // 4. Update Enrollment State
           await repository.updateEnrollment(enrollment.id, {
             current_step_number: enrollment.current_step_number + 1,
             last_processed_at: new Date().toISOString()

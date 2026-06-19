@@ -12,7 +12,7 @@ export class BuyingSignalsRepository {
 
     const { data: intelligence } = await supabase
       .from('company_intelligence')
-      .select('crm_detected, booking_detected, whatsapp_detected')
+      .select('crm_detected, booking_detected, whatsapp_detected, chatbot_detected')
       .eq('company_id', companyId)
       .single();
 
@@ -33,6 +33,7 @@ export class BuyingSignalsRepository {
       has_website: !!company.website_url,
       has_crm: intelligence?.crm_detected || false,
       has_booking_system: intelligence?.booking_detected || false,
+      has_chatbot: intelligence?.chatbot_detected || false,
       // If we found it in audit OR intelligence
       has_whatsapp_widget: (audit?.has_whatsapp_widget || intelligence?.whatsapp_detected) || false,
       seo_score: audit?.seo_score || 0,

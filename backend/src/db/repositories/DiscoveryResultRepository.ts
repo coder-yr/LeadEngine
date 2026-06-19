@@ -92,10 +92,28 @@ export class DiscoveryResultRepository {
     }
   }
 
-  async linkCompany(resultId: string, companyId: string) {
+  async linkCompany(resultId: string, companyId: string, extraData?: Record<string, any>) {
+    let updatePayload: any = { company_id: companyId };
+
+    if (extraData) {
+      // fetch current raw_data to merge
+      const { data: currentResult } = await supabase
+        .from('discovery_results')
+        .select('raw_data')
+        .eq('id', resultId)
+        .single();
+
+      if (currentResult) {
+        updatePayload.raw_data = {
+          ...(currentResult.raw_data || {}),
+          ...extraData
+        };
+      }
+    }
+
     const { data, error } = await supabase
       .from('discovery_results')
-      .update({ company_id: companyId })
+      .update(updatePayload)
       .eq('id', resultId)
       .select()
       .single();

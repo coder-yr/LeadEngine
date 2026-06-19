@@ -6,6 +6,7 @@ export interface CompanySignals {
   poor_seo: boolean;
   slow_website: boolean;
   no_booking_system: boolean;
+  no_chatbot: boolean;
   intent_score: number;
   created_at?: Date;
   updated_at?: Date;
@@ -16,6 +17,7 @@ export interface SignalInputs {
   has_crm: boolean;
   has_whatsapp_widget: boolean;
   has_booking_system: boolean;
+  has_chatbot: boolean;
   seo_score: number;
   page_speed_estimate: number;
 }

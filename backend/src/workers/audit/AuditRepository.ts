@@ -30,7 +30,7 @@ export class AuditRepository {
   async getCompanyWebsite(companyId: string): Promise<string | null> {
     const { data, error } = await supabase
       .from('companies')
-      .select('website')
+      .select('website_url')
       .eq('id', companyId)
       .single();
       
@@ -38,6 +38,6 @@ export class AuditRepository {
       return null;
     }
     
-    return data.website;
+    return data.website_url;
   }
 }

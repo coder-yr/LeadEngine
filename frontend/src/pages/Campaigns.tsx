@@ -91,14 +91,32 @@ export default function Campaigns() {
                         {campaign.campaign_steps?.length || 0} Step Sequence • Created {new Date(campaign.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => {
-                      // Mock enrollment for demo purposes
-                      const mockContactId = "e50157de-6df3-4c90-9f5e-146ff9344498"; // Usually you'd select this
-                      axios.post(`http://localhost:3000/api/campaigns/${campaign.id}/enroll`, {
-                        contacts: [{ contact_id: mockContactId, company_id: campaign.company_id }]
-                      }).then(() => fetchCampaigns());
+                    <Button variant="outline" size="sm" onClick={async () => {
+                      try {
+                        const res = await axios.get(`http://localhost:3000/api/contacts/company/${campaign.company_id}`);
+                        const contacts = res.data;
+                        if (!contacts || contacts.length === 0) {
+                          alert("No contacts found for this company to enroll.");
+                          return;
+                        }
+                        
+                        const enrollments = contacts.map((c: any) => ({
+                          contact_id: c.id,
+                          company_id: campaign.company_id
+                        }));
+
+                        await axios.post(`http://localhost:3000/api/campaigns/${campaign.id}/enroll`, {
+                          contacts: enrollments
+                        });
+                        
+                        fetchCampaigns();
+                      } catch (error) {
+                        console.error("Failed to enroll contacts", error);
+                        alert("Failed to enroll contacts.");
+                      }
                     }}>
-                      Simulate Enrollment
+                      <Target className="w-4 h-4 mr-2" />
+                      Enroll Company Contacts
                     </Button>
                   </div>
                 </CardHeader>

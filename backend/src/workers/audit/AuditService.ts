@@ -1,7 +1,13 @@
 import * as cheerio from 'cheerio';
+import { Ollama } from 'ollama';
 import { AuditResult, AuditIssue } from './types.js';
 
 export class AuditService {
+  private readonly ollamaClient: Ollama;
+
+  constructor() {
+    this.ollamaClient = new Ollama({ host: process.env.OLLAMA_API_URL || 'http://localhost:11434' });
+  }
   private async fetchWithTimeout(url: string, timeoutMs: number = 10000): Promise<Response> {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -133,6 +139,49 @@ export class AuditService {
     else auditSummary += 'It lacks mobile responsiveness tags. ';
     if (!hasContactForm && !hasWhatsAppWidget) auditSummary += 'It lacks strong lead conversion widgets.';
     else auditSummary += 'It has lead conversion elements in place.';
+
+    // Extract raw text for LLM parsing
+    let extractedCompanyInfo = undefined;
+    try {
+      const rawText = $('body').text().replace(/\s+/g, ' ').substring(0, 4000); // Limit to 4000 chars to avoid overwhelming the context window
+      if (rawText.length > 100) {
+        const prompt = `
+You are a data extraction bot. Extract the following company details from the website text below.
+If a detail is not clearly mentioned, omit it or set to null.
+
+Return ONLY a valid JSON object matching this schema:
+{
+  "city": "string or null",
+  "state_province": "string or null",
+  "country": "string or null",
+  "employee_count": "integer or null (rough estimate)",
+  "industry": "string or null",
+  "description": "string (1-2 sentence summary of what the company does)"
+}
+
+WEBSITE TEXT:
+${rawText}
+`;
+        const response = await this.ollamaClient.generate({
+          model: 'qwen3:8b', // Using qwen3:8b as default
+          prompt: prompt,
+          format: 'json',
+          stream: false,
+        });
+
+        const parsedInfo = JSON.parse(response.response);
+        extractedCompanyInfo = {
+          city: parsedInfo.city || undefined,
+          state_province: parsedInfo.state_province || undefined,
+          country: parsedInfo.country || undefined,
+          employee_count: parseInt(parsedInfo.employee_count) || undefined,
+          industry: parsedInfo.industry || undefined,
+          description: parsedInfo.description || undefined
+        };
+      }
+    } catch (e: any) {
+      console.warn('Failed to extract company info using Ollama:', e.message);
+    }
     
     return {
       url,
@@ -144,7 +193,8 @@ export class AuditService {
       hasWhatsAppWidget,
       socialLinksFound,
       auditSummary,
-      issues
+      issues,
+      extractedCompanyInfo
     };
   }
 }

@@ -40,12 +40,14 @@ export class ContactService {
   /**
    * Process and save a new contact
    */
-  public async processContact(contactData: Omit<ContactInsert, 'decision_maker_score'>): Promise<Contact> {
+  public async processContact(contactData: Omit<ContactInsert, 'is_decision_maker' | 'is_primary_contact' | 'status'>): Promise<Contact> {
     const score = this.calculateDecisionMakerScore(contactData.title);
     
     const newContact: ContactInsert = {
       ...contactData,
-      decision_maker_score: score
+      is_decision_maker: score >= 70,
+      is_primary_contact: false,
+      status: 'new'
     };
 
     return await this.contactRepo.createContact(newContact);

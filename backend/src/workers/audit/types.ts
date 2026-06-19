@@ -17,6 +17,14 @@ export interface AuditResult {
   socialLinksFound: string[];
   auditSummary: string;
   issues: AuditIssue[];
+  extractedCompanyInfo?: {
+    city?: string;
+    state_province?: string;
+    country?: string;
+    employee_count?: number;
+    industry?: string;
+    description?: string;
+  };
 }
 
 export const AuditResultSchema = z.object({

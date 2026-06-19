@@ -23,7 +23,7 @@ const SIMILARITY_THRESHOLD = 0.85;
  * Normalize a phone number for comparison.
  * Strips all non-digit characters and returns the last 10 digits.
  */
-function normalizePhone(phone: string | undefined | null): string | null {
+export function normalizePhone(phone: string | undefined | null): string | null {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 7) return null;
@@ -34,7 +34,7 @@ function normalizePhone(phone: string | undefined | null): string | null {
 /**
  * Extract the domain from a URL for comparison.
  */
-function extractDomain(url: string | undefined | null): string | null {
+export function extractDomain(url: string | undefined | null): string | null {
   if (!url) return null;
   try {
     let normalized = url.trim().toLowerCase();
@@ -52,7 +52,7 @@ function extractDomain(url: string | undefined | null): string | null {
  * Calculate similarity ratio between two strings (0 to 1).
  * Uses Levenshtein distance normalized by the max string length.
  */
-function similarityRatio(a: string, b: string): number {
+export function similarityRatio(a: string, b: string): number {
   if (!a || !b) return 0;
   const cleanA = a.trim().toLowerCase();
   const cleanB = b.trim().toLowerCase();
@@ -209,5 +209,66 @@ export class DeduplicationService {
     }
 
     return bestId;
+  }
+
+  /**
+   * Find the best matching existing company for a discovery record.
+   * Returns the company and match confidence score (0 to 1.0).
+   * Only returns a match if the confidence >= SIMILARITY_THRESHOLD.
+   */
+  findBestMatch(record: RawDiscoveryRecord, existingCompanies: any[]): { company: any; confidence: number; reason: string } | null {
+    if (!existingCompanies || existingCompanies.length === 0) return null;
+
+    const recordPhone = normalizePhone(record.raw_phone);
+    const recordDomain = extractDomain(record.raw_website);
+    const recordName = record.raw_name || '';
+
+    let bestMatch = null;
+    let highestConfidence = 0;
+    let bestReason = '';
+
+    for (const company of existingCompanies) {
+      let confidence = 0;
+      let reason = '';
+
+      // 1. Exact Phone Match
+      const companyPhone = normalizePhone(company.phone);
+      if (recordPhone && companyPhone && recordPhone === companyPhone) {
+        confidence = 1.0;
+        reason = 'Exact Phone Match';
+      }
+      
+      // 2. Exact Domain Match
+      const companyDomain = extractDomain(company.website_url);
+      if (confidence < 1.0 && recordDomain && companyDomain && recordDomain === companyDomain) {
+        confidence = Math.max(confidence, 0.9);
+        if (confidence === 0.9) reason = 'Exact Domain Match';
+      }
+
+      // 3. Fuzzy Name Match
+      const companyName = company.name || '';
+      if (confidence < 0.9 && recordName && companyName) {
+        const nameSim = similarityRatio(recordName, companyName);
+        confidence = Math.max(confidence, nameSim);
+        if (confidence === nameSim) reason = 'Fuzzy Name Match';
+      }
+
+      if (confidence > highestConfidence) {
+        highestConfidence = confidence;
+        bestMatch = company;
+        bestReason = reason;
+      }
+
+      // If we find a perfect match, no need to keep looking
+      if (highestConfidence === 1.0) {
+        break;
+      }
+    }
+
+    if (bestMatch && highestConfidence >= SIMILARITY_THRESHOLD) {
+      return { company: bestMatch, confidence: highestConfidence, reason: bestReason };
+    }
+
+    return null;
   }
 }

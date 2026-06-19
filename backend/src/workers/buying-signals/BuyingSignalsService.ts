@@ -35,6 +35,7 @@ export class BuyingSignalsService {
     const no_crm = !inputs.has_crm;
     const no_whatsapp = !inputs.has_whatsapp_widget;
     const no_booking_system = !inputs.has_booking_system;
+    const no_chatbot = !inputs.has_chatbot;
     
     // Website quality signals (only valid if they actually have a website)
     const poor_seo = inputs.has_website && inputs.seo_score < 50;
@@ -45,9 +46,10 @@ export class BuyingSignalsService {
     if (no_website) intentScore += 30; // Critical need
     if (poor_seo) intentScore += 15;
     if (slow_website) intentScore += 15;
-    if (no_crm) intentScore += 15;
-    if (no_whatsapp) intentScore += 15;
+    if (no_crm) intentScore += 10;
+    if (no_whatsapp) intentScore += 10;
     if (no_booking_system) intentScore += 10;
+    if (no_chatbot) intentScore += 10;
 
     // Cap at 100
     intentScore = Math.min(100, intentScore);
@@ -60,6 +62,7 @@ export class BuyingSignalsService {
       poor_seo,
       slow_website,
       no_booking_system,
+      no_chatbot,
       intent_score: intentScore
     };
   }

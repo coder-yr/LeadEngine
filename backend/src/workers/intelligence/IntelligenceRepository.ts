@@ -17,13 +17,12 @@ export class IntelligenceRepository {
         website_url,
         phone,
         industry,
-        websites (
-          is_mobile_friendly,
+        website_audits (
+          mobile_friendly,
           has_contact_form,
           has_whatsapp_widget,
-          has_booking_system,
-          has_crm_integration,
-          seo_score
+          seo_score,
+          social_links_found
         )
       `)
       .eq('id', companyId)
@@ -34,8 +33,8 @@ export class IntelligenceRepository {
       return null;
     }
 
-    // Determine raw feature set from website relation if it exists
-    const websiteData = company.websites && company.websites.length > 0 ? company.websites[0] : null;
+    // Determine raw feature set from website_audits relation if it exists
+    const websiteData = company.website_audits && company.website_audits.length > 0 ? company.website_audits[0] : null;
 
     return {
       id: company.id,
@@ -46,10 +45,10 @@ export class IntelligenceRepository {
       has_website: !!company.website_url,
       has_contact_form: websiteData?.has_contact_form || false,
       has_whatsapp_widget: websiteData?.has_whatsapp_widget || false,
-      has_booking_system: websiteData?.has_booking_system || false,
-      has_crm: websiteData?.has_crm_integration || false,
+      has_booking_system: false, // Wait, website_audits doesn't have has_booking_system explicitly, but AuditService might add it if we expand it. For now false.
+      has_crm: false,
       website_score: websiteData?.seo_score || 0,
-      social_profiles: [] // Placeholder until we extract social links
+      social_profiles: websiteData?.social_links_found || []
     };
   }
 

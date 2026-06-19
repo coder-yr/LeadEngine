@@ -29,6 +29,7 @@ describe('BuyingSignalsService', () => {
         has_crm: true,
         has_whatsapp_widget: true,
         has_booking_system: true,
+        has_chatbot: true,
         seo_score: 90,
         page_speed_estimate: 95
       };
@@ -47,18 +48,19 @@ describe('BuyingSignalsService', () => {
         has_crm: false,
         has_whatsapp_widget: false,
         has_booking_system: false,
+        has_chatbot: false,
         seo_score: 0,
         page_speed_estimate: 0
       };
 
       const signals = service.calculateSignals('comp-2', inputs);
       
-      // no_website: 30, no_crm: 15, no_whatsapp: 15, no_booking_system: 10
+      // no_website: 30, no_crm: 15, no_whatsapp: 15, no_booking_system: 10, no_chatbot: 10
       // Since no website, poor_seo and slow_website are false
       expect(signals.no_website).toBe(true);
       expect(signals.poor_seo).toBe(false);
       expect(signals.slow_website).toBe(false);
-      expect(signals.intent_score).toBe(30 + 15 + 15 + 10); // 70
+      expect(signals.intent_score).toBe(30 + 15 + 15 + 10 + 10); // 80
     });
 
     it('should calculate max intent score if website exists but is terrible', () => {
@@ -67,16 +69,17 @@ describe('BuyingSignalsService', () => {
         has_crm: false,
         has_whatsapp_widget: false,
         has_booking_system: false,
+        has_chatbot: false,
         seo_score: 20,
         page_speed_estimate: 40
       };
 
       const signals = service.calculateSignals('comp-3', inputs);
       
-      // poor_seo: 15, slow_website: 15, no_crm: 15, no_whatsapp: 15, no_booking_system: 10 => 70
+      // poor_seo: 15, slow_website: 15, no_crm: 15, no_whatsapp: 15, no_booking_system: 10, no_chatbot: 10 => 80
       expect(signals.poor_seo).toBe(true);
       expect(signals.slow_website).toBe(true);
-      expect(signals.intent_score).toBe(15 + 15 + 15 + 15 + 10); // 70
+      expect(signals.intent_score).toBe(15 + 15 + 15 + 15 + 10 + 10); // 80
     });
   });
 
@@ -87,6 +90,7 @@ describe('BuyingSignalsService', () => {
         has_crm: true,
         has_whatsapp_widget: false,
         has_booking_system: true,
+        has_chatbot: false,
         seo_score: 80,
         page_speed_estimate: 90
       };

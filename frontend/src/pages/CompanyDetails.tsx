@@ -38,16 +38,21 @@ export default function CompanyDetails() {
           name: dbCompany.name,
           website: dbCompany.website_url,
           industry: dbCompany.industry || 'Unknown',
+          city: dbCompany.city || null,
+          state_province: dbCompany.state_province || null,
+          address: dbCompany.address || null,
+          employee_count: dbCompany.employee_count || null,
           lastAudited: dbCompany.created_at,
+          website_audits: dbCompany.website_audits,
           intelligence: {
             leadScore: dbCompany.company_intelligence?.[0]?.lead_score || 0,
-            websiteScore: dbCompany.company_intelligence?.[0]?.website_score || 0,
-            socialPresence: dbCompany.company_intelligence?.[0]?.social_profiles?.length > 0,
-            whatsappPresence: dbCompany.company_intelligence?.[0]?.whatsapp_detected || false,
-            crmPresence: dbCompany.company_intelligence?.[0]?.crm_detected || false,
-            bookingPresence: dbCompany.company_intelligence?.[0]?.booking_detected || false,
+            websiteScore: dbCompany.website_audits?.[0]?.seo_score || 0,
+            socialPresence: (dbCompany.website_audits?.[0]?.social_links_found?.length || 0) > 0,
+            whatsappPresence: dbCompany.website_audits?.[0]?.has_whatsapp_widget || false,
+            crmPresence: false,
+            bookingPresence: dbCompany.website_audits?.[0]?.has_contact_form || false,
             aiInsight: "Strategic AI Insights generated successfully.",
-            recommendedServices: dbCompany.company_intelligence?.[0]?.services_needed || ["SEO", "Web Dev"]
+            recommendedServices: dbCompany.company_intelligence?.[0]?.services_needed || []
           }
         };
 
@@ -64,10 +69,11 @@ export default function CompanyDetails() {
   if (loading || !company) return <div className="p-10 text-center text-muted-foreground">Loading company profile...</div>;
   
   // Create bridge object for legacy tabs that still expect 'Lead'
-  const mockLead = {
+  const auditData = company.website_audits?.[0] || {};
+  const formattedLead = {
     id: company.id,
-    name: "Unknown Contact",
-    title: "Unknown",
+    name: company.name, // Will be overridden or ignored by most tabs now, except Overview
+    title: "Primary Contact",
     company: company.name,
     email: "contact@" + company.website,
     intelligence: {
@@ -78,16 +84,16 @@ export default function CompanyDetails() {
     },
     audit: {
       url: `https://${company.website}`,
-      auditedAt: company.lastAudited,
-      seoScore: company.intelligence.websiteScore,
-      mobileFriendly: true,
-      sslEnabled: true,
-      pageSpeedEstimate: 85,
-      hasContactForm: company.intelligence.bookingPresence,
-      hasWhatsAppWidget: company.intelligence.whatsappPresence,
-      socialLinksFound: company.intelligence.socialPresence ? ["https://linkedin.com"] : [],
-      auditSummary: "Dynamic audit summary",
-      issues: []
+      auditedAt: auditData.audited_at || company.lastAudited,
+      seoScore: auditData.seo_score || 0,
+      mobileFriendly: auditData.mobile_friendly ?? false,
+      sslEnabled: auditData.ssl_enabled ?? false,
+      pageSpeedEstimate: auditData.page_speed_estimate || 0,
+      hasContactForm: auditData.has_contact_form ?? false,
+      hasWhatsAppWidget: auditData.has_whatsapp_widget ?? false,
+      socialLinksFound: auditData.social_links_found || [],
+      auditSummary: auditData.audit_summary || "Audit pending",
+      issues: auditData.issues || []
     },
     activities: []
   };
@@ -140,15 +146,19 @@ export default function CompanyDetails() {
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Industry</span>
-                  <Badge variant="secondary">{company.industry}</Badge>
+                  <Badge variant="secondary">{company.industry === 'UNKNOWN' ? 'Not specified' : company.industry}</Badge>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Location</span>
-                  <span className="font-medium text-foreground">San Francisco, CA</span>
+                <div className="flex justify-between items-start text-right">
+                  <span className="text-muted-foreground shrink-0 mr-4">Location</span>
+                  <span className="font-medium text-foreground text-xs leading-tight">
+                    {company.city || company.state_province 
+                      ? `${company.city || ''}${company.city && company.state_province ? ', ' : ''}${company.state_province || ''}` 
+                      : (company.address || 'Not specified')}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Employees</span>
-                  <span className="font-medium text-foreground">50-200</span>
+                  <span className="font-medium text-foreground">{company.employee_count ? company.employee_count.toString() : 'Not specified'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Last Audited</span>
@@ -218,12 +228,14 @@ export default function CompanyDetails() {
               </TabsList>
               
               <div className="mt-4">
-                <TabsContent value="overview" className="m-0 border-0 p-0"><LeadOverviewTab lead={mockLead as any} /></TabsContent>
-                <TabsContent value="audit" className="m-0 border-0 p-0"><WebsiteAuditTab audit={mockLead.audit} /></TabsContent>
-                <TabsContent value="insights" className="m-0 border-0 p-0"><AIInsightsTab intelligence={mockLead.intelligence} /></TabsContent>
+                <TabsContent value="overview" className="m-0 border-0 p-0"><LeadOverviewTab lead={formattedLead as any} /></TabsContent>
+                <TabsContent value="audit" className="m-0 border-0 p-0">
+                  <WebsiteAuditTab audit={company.website_audits && company.website_audits.length > 0 ? formattedLead.audit : undefined} />
+                </TabsContent>
+                <TabsContent value="insights" className="m-0 border-0 p-0"><AIInsightsTab intelligence={formattedLead.intelligence} /></TabsContent>
                 <TabsContent value="services" className="m-0 border-0 p-0"><ServicesNeededTab company={company} /></TabsContent>
                 <TabsContent value="contacts" className="m-0 border-0 p-0"><ContactsTab company={company} /></TabsContent>
-                <TabsContent value="activities" className="m-0 border-0 p-0"><ActivityTimelineTab activities={mockLead.activities} /></TabsContent>
+                <TabsContent value="activities" className="m-0 border-0 p-0"><ActivityTimelineTab activities={formattedLead.activities} /></TabsContent>
                 <TabsContent value="campaigns" className="m-0 border-0 p-0"><CampaignsTab company={company} /></TabsContent>
                 <TabsContent value="proposals" className="m-0 border-0 p-0"><ProposalsTab companyId={company.id} /></TabsContent>
                 <TabsContent value="agent" className="m-0 border-0 p-0"><AIAgentTab companyId={company.id} /></TabsContent>

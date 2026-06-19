@@ -41,11 +41,25 @@ export class CompanyRepository {
    * Creates a new company if no duplicate exists based on website or phone
    */
   async create(company: CompanyInput) {
-    // Check for duplicates
-    const existing = await this.findByWebsiteOrPhone(company.website_url, company.phone);
-    if (existing) {
-      console.log(`Company with website ${company.website_url} or phone ${company.phone} already exists.`);
-      return existing; // Return the existing record instead of throwing
+    // Check for duplicates and throw specific errors
+    if (company.website_url) {
+      const existingWeb = await supabase.from('companies').select('*').eq('website_url', company.website_url).maybeSingle();
+      if (existingWeb.data) {
+        const error: any = new Error(`Duplicate Website Detected: ${company.website_url}`);
+        error.code = 'DUPLICATE_WEBSITE';
+        error.existingCompany = existingWeb.data;
+        throw error;
+      }
+    }
+
+    if (company.phone) {
+      const existingPhone = await supabase.from('companies').select('*').eq('phone', company.phone).maybeSingle();
+      if (existingPhone.data) {
+        const error: any = new Error(`Duplicate Phone Detected: ${company.phone}`);
+        error.code = 'DUPLICATE_PHONE';
+        error.existingCompany = existingPhone.data;
+        throw error;
+      }
     }
 
     const { data, error } = await supabase
@@ -56,7 +70,10 @@ export class CompanyRepository {
 
     if (error) {
       console.error('Error creating company:', error);
-      throw error;
+      const err: any = new Error(`Validation Failure / DB Error: ${error.message}`);
+      err.code = 'DB_ERROR';
+      err.originalError = error;
+      throw err;
     }
 
     return data;
@@ -79,6 +96,18 @@ export class CompanyRepository {
           whatsapp_detected,
           booking_detected,
           social_profiles
+        ),
+        website_audits (
+          seo_score,
+          mobile_friendly,
+          ssl_enabled,
+          page_speed_estimate,
+          has_contact_form,
+          has_whatsapp_widget,
+          social_links_found,
+          audit_summary,
+          issues,
+          audited_at
         )
       `)
       .order('created_at', { ascending: false });
@@ -137,7 +166,7 @@ export class CompanyRepository {
           slow_website,
           no_booking_system
         ),
-        websites (*),
+        website_audits (*),
         contacts (*),
         activities (*)
       `)

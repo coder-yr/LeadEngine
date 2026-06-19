@@ -62,20 +62,23 @@ describe('ContactService', () => {
     it('should calculate score and call repository createContact', async () => {
       const contactData = {
         company_id: 'comp-123',
-        name: 'John Doe',
+        first_name: 'John',
+        last_name: 'Doe',
         title: 'Founder',
         department: 'Executive',
         email: 'john@example.com',
         phone: null,
-        linkedin: null
+        linkedin_url: null
       };
 
       await contactService.processContact(contactData);
 
-      // Verify that the repository was called with the calculated score of 95
+      // Verify that the repository was called with the calculated score of 95 (is_decision_maker: true)
       expect(mockCreateContact).toHaveBeenCalledWith({
         ...contactData,
-        decision_maker_score: 95
+        is_decision_maker: true,
+        is_primary_contact: false,
+        status: 'new'
       });
     });
   });

@@ -41,12 +41,10 @@ backend/dist/
 backend/node_modules/
 
 # Workers
+**/__pycache__/
 workers/.pytest_cache/
 workers/.mypy_cache/
 workers/node_modules/
-**/__pycache__/
-*.pyc
-**/*.pyc
 
 # Logs
 logs/
@@ -87,3 +85,6 @@ ollama_data/
 *.cert
 .cache/
 tmp/
+backend/scratch*.ts
+backend/check_queues.ts
+workers/src/error_screenshots/
