@@ -8,13 +8,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import axios from "axios";
 
-const SOURCES = [
+const STANDARD_SOURCES = [
   { id: "google_maps", label: "Google Maps" },
-  { id: "justdial", label: "JustDial" },
-  { id: "indiamart", label: "IndiaMart" },
-  { id: "tradeindia", label: "TradeIndia" },
-  { id: "sulekha", label: "Sulekha" },
+  { id: "duckduckgo", label: "DuckDuckGo" },
+  { id: "website_search", label: "Website Search" },
+  { id: "grotal", label: "Grotal" },
+  { id: "asklaila", label: "AskLaila" },
 ];
+
+const EXPERIMENTAL_SOURCES = [
+  { id: "yellowpages", label: "YellowPages" },
+  { id: "hotfrog", label: "Hotfrog" },
+];
+
+const ALL_SOURCES = [...STANDARD_SOURCES, ...EXPERIMENTAL_SOURCES];
 
 interface DiscoverySearchFormProps {
   onJobStarted: () => void;
@@ -24,7 +31,7 @@ export function DiscoverySearchForm({ onJobStarted }: DiscoverySearchFormProps) 
   const [keyword, setKeyword] = useState("");
   const [city, setCity] = useState("");
   const [maxResults, setMaxResults] = useState([50]);
-  const [sources, setSources] = useState<string[]>(SOURCES.map((s) => s.id));
+  const [sources, setSources] = useState<string[]>(ALL_SOURCES.map((s) => s.id));
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSourceToggle = (sourceId: string) => {
@@ -112,24 +119,52 @@ export function DiscoverySearchForm({ onJobStarted }: DiscoverySearchFormProps) 
 
           <div className="space-y-3">
             <Label className="text-slate-700">Data Sources</Label>
-            <div className="flex flex-wrap gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100 shadow-inner">
-              {SOURCES.map((source) => (
-                <div key={source.id} className="flex items-center space-x-2 bg-white px-3 py-2 rounded-md hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer" onClick={() => handleSourceToggle(source.id)}>
-                  <Checkbox 
-                    id={`source-${source.id}`}
-                    checked={sources.includes(source.id)}
-                    onCheckedChange={() => handleSourceToggle(source.id)}
-                    className="data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
-                  />
-                  <Label 
-                    htmlFor={`source-${source.id}`}
-                    className="cursor-pointer text-sm font-medium text-slate-700"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {source.label}
-                  </Label>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-slate-700 font-semibold mb-2 block">Standard Sources</Label>
+                <div className="flex flex-wrap gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100 shadow-inner">
+                  {STANDARD_SOURCES.map((source) => (
+                    <div key={source.id} className="flex items-center space-x-2 bg-white px-3 py-2 rounded-md hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer" onClick={() => handleSourceToggle(source.id)}>
+                      <Checkbox 
+                        id={`source-${source.id}`}
+                        checked={sources.includes(source.id)}
+                        onCheckedChange={() => handleSourceToggle(source.id)}
+                        className="data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                      />
+                      <Label 
+                        htmlFor={`source-${source.id}`}
+                        className="cursor-pointer text-sm font-medium text-slate-700"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {source.label}
+                      </Label>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+              
+              <div>
+                <Label className="text-slate-700 font-semibold mb-2 block">Experimental Sources</Label>
+                <div className="flex flex-wrap gap-3 p-4 rounded-xl bg-amber-50/50 border border-amber-100 shadow-inner">
+                  {EXPERIMENTAL_SOURCES.map((source) => (
+                    <div key={source.id} className="flex items-center space-x-2 bg-white px-3 py-2 rounded-md hover:bg-amber-50 border border-amber-200 transition-colors cursor-pointer" onClick={() => handleSourceToggle(source.id)}>
+                      <Checkbox 
+                        id={`source-${source.id}`}
+                        checked={sources.includes(source.id)}
+                        onCheckedChange={() => handleSourceToggle(source.id)}
+                        className="data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                      />
+                      <Label 
+                        htmlFor={`source-${source.id}`}
+                        className="cursor-pointer text-sm font-medium text-slate-700"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {source.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

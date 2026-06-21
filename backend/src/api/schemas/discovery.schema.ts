@@ -4,9 +4,9 @@ export const discoverySearchSchema = z.object({
   keyword: z.string().min(1, "Keyword is required").trim(),
   city: z.string().min(1, "City is required").trim(),
   sources: z.array(z.enum([
-    'google_maps', 'justdial', 'indiamart', 'tradeindia', 'sulekha'
-  ])).optional().default(['google_maps', 'justdial', 'indiamart', 'tradeindia', 'sulekha']),
-  max_results: z.number().int().min(1).max(100).optional().default(50),
+    'google_maps', 'duckduckgo', 'website_search', 'grotal', 'asklaila', 'yellowpages', 'hotfrog'
+  ])).optional().default(['google_maps', 'duckduckgo', 'website_search', 'grotal', 'asklaila']),
+  max_results: z.number().int().min(1).max(200).optional().default(50),
 });
 
 export type DiscoverySearchInput = z.infer<typeof discoverySearchSchema>;

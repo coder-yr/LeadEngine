@@ -182,28 +182,35 @@ export class DeduplicationService {
 
   /**
    * Pick the "best" (most complete) record from a group to be the canonical.
-   * Scores records by number of non-null fields.
+   * Priority:
+   * 1. Highest quality_score
+   * 2. Website exists
+   * 3. Email exists
+   * 4. Phone exists
    */
   private pickCanonical(ids: string[], allRecords: RawDiscoveryRecord[]): string {
     const recordMap = new Map(allRecords.map(r => [r.id, r]));
 
     let bestId = ids[0];
-    let bestScore = 0;
+    let bestScore = -1;
 
     for (const id of ids) {
       const record = recordMap.get(id);
       if (!record) continue;
 
-      let score = 0;
-      if (record.raw_name) score += 2;
-      if (record.raw_phone) score += 3;
-      if (record.raw_email) score += 3;
-      if (record.raw_website) score += 2;
-      if (record.raw_address) score += 1;
-      if (record.raw_rating) score += 1;
+      let score = record.raw_data?.quality_score || 0;
+      
+      // If quality_score is the same (or 0), we add fractional points for other properties
+      // to resolve ties according to priority: Website > Email > Phone.
+      let tieBreaker = 0;
+      if (record.raw_website) tieBreaker += 0.4;
+      if (record.raw_email) tieBreaker += 0.3;
+      if (record.raw_phone) tieBreaker += 0.2;
+      
+      const totalScore = score + tieBreaker;
 
-      if (score > bestScore) {
-        bestScore = score;
+      if (totalScore > bestScore) {
+        bestScore = totalScore;
         bestId = id;
       }
     }

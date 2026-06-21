@@ -40,18 +40,22 @@ logger = logging.getLogger("discovery_runner")
 
 # Scraper imports
 from gmaps_scraper import scrape_google_maps
-from justdial_scraper import scrape_justdial
-from indiamart_scraper import scrape_indiamart
-from tradeindia_scraper import scrape_tradeindia
-from sulekha_scraper import scrape_sulekha
+from duckduckgo_scraper import scrape_duckduckgo
+from website_search_scraper import scrape_website_search
+from grotal_scraper import scrape_grotal
+from asklaila_scraper import scrape_asklaila
+from yellowpages_scraper import scrape_yellowpages
+from hotfrog_scraper import scrape_hotfrog
 
 # Map source names to scraper functions
 SCRAPER_MAP = {
     "google_maps": scrape_google_maps,
-    "justdial": scrape_justdial,
-    "indiamart": scrape_indiamart,
-    "tradeindia": scrape_tradeindia,
-    "sulekha": scrape_sulekha,
+    "duckduckgo": scrape_duckduckgo,
+    "website_search": scrape_website_search,
+    "grotal": scrape_grotal,
+    "asklaila": scrape_asklaila,
+    "yellowpages": scrape_yellowpages,
+    "hotfrog": scrape_hotfrog,
 }
 
 ALL_SOURCES = list(SCRAPER_MAP.keys())

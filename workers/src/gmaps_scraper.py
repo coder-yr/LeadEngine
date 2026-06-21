@@ -111,6 +111,9 @@ async def _extract_listing(page: Page, listing, retries: int = 2) -> Optional[Di
             if not business_data.get("Business Name"):
                 return None
 
+            from scraper_utils import calculate_quality_score
+            business_data["quality_score"] = calculate_quality_score(business_data)
+
             return business_data
 
         except Exception as e:
