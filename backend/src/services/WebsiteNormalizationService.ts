@@ -20,6 +20,13 @@ const DIRECTORY_DOMAINS = [
   'clinicspots.com',
   'sehat.com',
   'apollo247.com',
+  'wa.link',
+  'bit.ly',
+  'tinyurl.com',
+  'linktr.ee',
+  'calendly.com',
+  'setmore.com',
+  'beacons.ai'
 ];
 
 export class WebsiteNormalizationService {

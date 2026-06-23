@@ -45,4 +45,27 @@ router.patch('/:id/stage', async (req: Request, res: Response) => {
   }
 });
 
+// DELETE /api/companies/:id - Hard delete company and all related data
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Safety check - verify existence before delete
+    const company = await repository.getCompanyById(id);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const summary = await repository.deleteCompany(id);
+    
+    return res.json({
+      success: true,
+      summary
+    });
+  } catch (error) {
+    console.error(`Error deleting company ${req.params.id}:`, error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

@@ -12,6 +12,7 @@ import Campaigns from './pages/Campaigns';
 import Tasks from './pages/Tasks';
 import Settings from './pages/Settings';
 import Activities from './pages/Activities';
+import WebsiteAuditTester from './pages/WebsiteAuditTester';
 
 export function App() {
   return (
@@ -28,6 +29,7 @@ export function App() {
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/activities" element={<Activities />} />
+          <Route path="/tools/audit-tester" element={<WebsiteAuditTester />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppLayout>

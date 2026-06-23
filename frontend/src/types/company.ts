@@ -16,6 +16,7 @@ export interface Company {
   industry: string;
   intelligence: CompanyIntelligence;
   lastAudited: string;
+  auditStatus?: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
 }
 
 export const MOCK_COMPANIES: Company[] = [

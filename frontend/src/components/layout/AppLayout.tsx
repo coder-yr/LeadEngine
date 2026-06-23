@@ -7,7 +7,8 @@ import {
   KanbanSquare, 
   ListTodo,
   Settings,
-  Activity
+  Activity,
+  TestTubes
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "./CommandPalette";
@@ -38,6 +39,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         
         <div className="flex-1 overflow-y-auto py-4">
           <nav className="grid gap-1 px-4">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 mt-2 px-3">
+              Core
+            </div>
             {navigation.map((item) => {
               const isActive = location.pathname === item.href;
               return (
@@ -56,6 +60,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 mt-6 px-3">
+              Tools
+            </div>
+            <Link
+              to="/tools/audit-tester"
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
+                location.pathname === "/tools/audit-tester" 
+                  ? "bg-primary text-primary-foreground shadow-sm" 
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <TestTubes className="h-4 w-4" />
+              Audit Tester
+            </Link>
           </nav>
         </div>
 

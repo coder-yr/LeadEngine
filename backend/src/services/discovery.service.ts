@@ -185,6 +185,8 @@ export class DiscoveryService {
             industry: undefined,
             description: undefined,
             status: 'prospect',
+            discovery_job_id: jobId,
+            discovery_source: record.source,
           });
 
           // Link the discovery result to the new company

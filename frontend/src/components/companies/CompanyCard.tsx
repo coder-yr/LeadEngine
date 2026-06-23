@@ -14,14 +14,16 @@ import {
   XCircle,
   Lightbulb,
   Rocket,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from "lucide-react";
 
 interface CompanyCardProps {
   company: Company;
+  onDelete?: (id: string) => void;
 }
 
-export function CompanyCard({ company }: CompanyCardProps) {
+export function CompanyCard({ company, onDelete }: CompanyCardProps) {
   const { intelligence } = company;
 
   const getScoreColor = (score: number) => {
@@ -69,11 +71,23 @@ export function CompanyCard({ company }: CompanyCardProps) {
                 </a>
               </div>
             </div>
-            
-            <Badge variant="outline" className="mb-6 bg-muted/50">
-              <Building2 className="w-3 h-3 mr-1" />
-              {company.industry}
-            </Badge>
+            <div className="flex gap-2 mb-6">
+              <Badge variant="outline" className="bg-muted/50">
+                <Building2 className="w-3 h-3 mr-1" />
+                {company.industry}
+              </Badge>
+              {company.auditStatus === 'RUNNING' && (
+                <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 animate-pulse border-blue-500/20">
+                  <Rocket className="w-3 h-3 mr-1 animate-spin" />
+                  Auditing
+                </Badge>
+              )}
+              {company.auditStatus === 'FAILED' && (
+                <Badge variant="outline" className="text-red-500 border-red-500/30">
+                  Audit Failed
+                </Badge>
+              )}
+            </div>
 
             <div className="space-y-4">
               <div>
@@ -134,8 +148,18 @@ export function CompanyCard({ company }: CompanyCardProps) {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end">
-              <Button variant="ghost" className="text-primary hover:text-primary hover:bg-primary/10 gap-1 group-hover:underline" asChild>
+            <div className="mt-6 flex justify-between items-center">
+              {onDelete && (
+                <Button 
+                  variant="ghost" 
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-1 px-3" 
+                  onClick={() => onDelete(company.id)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Delete</span>
+                </Button>
+              )}
+              <Button variant="ghost" className="text-primary hover:text-primary hover:bg-primary/10 gap-1 group-hover:underline ml-auto" asChild>
                 <Link to={`/companies/${company.id}`}>
                   View Full Profile
                   <ChevronRight className="w-4 h-4" />

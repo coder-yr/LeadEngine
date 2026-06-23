@@ -55,6 +55,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 *.log
+debug_output*.json
+backend/run-debug.ts
+backend/debug_output*.json
 
 # OS
 .DS_Store

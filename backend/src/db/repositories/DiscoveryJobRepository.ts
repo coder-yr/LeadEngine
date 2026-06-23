@@ -95,14 +95,63 @@ export class DiscoveryJobRepository {
   }
 
   async deleteJob(jobId: string) {
-    const { error } = await supabase
-      .from('discovery_jobs')
-      .delete()
-      .eq('id', jobId);
+    try {
+      // 1. Fetch company_ids for companies created by this job using discovery_results (fallback for legacy records)
+      const { data: results, error: resultsError } = await supabase
+        .from('discovery_results')
+        .select('company_id, raw_data')
+        .eq('job_id', jobId)
+        .not('company_id', 'is', null);
 
-    if (error) {
-      console.error(`Error deleting discovery job ${jobId}:`, error);
-      throw error;
+      if (resultsError) {
+        console.error(`Error fetching results to delete companies for job ${jobId}:`, resultsError);
+      }
+
+      const companyIdsFromResults = results
+        ?.filter(r => (r.raw_data as any)?.is_new_company === true)
+        .map(r => r.company_id) || [];
+
+      // 2. Fetch company IDs where discovery_job_id matches this jobId (for new records)
+      const { data: companiesByJob, error: companiesError } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('discovery_job_id', jobId);
+
+      if (companiesError) {
+        console.error(`Error fetching companies by discovery_job_id for job ${jobId}:`, companiesError);
+      }
+
+      const companyIdsFromJob = companiesByJob?.map(c => c.id) || [];
+
+      // Combine and get unique IDs
+      const uniqueCompanyIds = Array.from(new Set([...companyIdsFromResults, ...companyIdsFromJob]));
+
+      // 3. Delete companies (this automatically cascades to contacts, website_audits, signals, etc.)
+      if (uniqueCompanyIds.length > 0) {
+        const { error: deleteCompaniesError } = await supabase
+          .from('companies')
+          .delete()
+          .in('id', uniqueCompanyIds);
+
+        if (deleteCompaniesError) {
+          console.error(`Error deleting companies for job ${jobId}:`, deleteCompaniesError);
+          throw deleteCompaniesError;
+        }
+      }
+
+      // 4. Delete the discovery job itself (this will cascade delete discovery_results)
+      const { error } = await supabase
+        .from('discovery_jobs')
+        .delete()
+        .eq('id', jobId);
+
+      if (error) {
+        console.error(`Error deleting discovery job ${jobId}:`, error);
+        throw error;
+      }
+    } catch (err) {
+      console.error(`Failed to delete discovery job ${jobId}:`, err);
+      throw err;
     }
   }
 

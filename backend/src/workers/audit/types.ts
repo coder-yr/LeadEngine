@@ -14,6 +14,10 @@ export interface AuditResult {
   pageSpeedEstimate: number;
   hasContactForm: boolean;
   hasWhatsAppWidget: boolean;
+  hasCrm: boolean;
+  hasBookingSystem: boolean;
+  hasChatbot: boolean;
+  hasAnalytics: boolean;
   socialLinksFound: string[];
   auditSummary: string;
   issues: AuditIssue[];
@@ -23,7 +27,23 @@ export interface AuditResult {
     country?: string;
     employee_count?: number;
     industry?: string;
+    industry_confidence?: number;
     description?: string;
+    business_model?: string;
+    target_audience?: string;
+    services_offered?: string[];
+  };
+  fetchTimeMs?: number;
+  parseTimeMs?: number;
+  aiTimeMs?: number;
+  totalTimeMs?: number;
+  debug?: {
+    ollama?: {
+      promptPreview?: string;
+      rawOllamaResponse?: string;
+      parsedJson?: any;
+      parseError?: string;
+    };
   };
 }
 
@@ -35,11 +55,19 @@ export const AuditResultSchema = z.object({
   pageSpeedEstimate: z.number().min(0).max(100),
   hasContactForm: z.boolean(),
   hasWhatsAppWidget: z.boolean(),
+  hasCrm: z.boolean(),
+  hasBookingSystem: z.boolean(),
+  hasChatbot: z.boolean(),
+  hasAnalytics: z.boolean(),
   socialLinksFound: z.array(z.string()),
   auditSummary: z.string(),
   issues: z.array(z.object({
     type: z.enum(['seo', 'performance', 'security', 'conversion']),
     message: z.string(),
     severity: z.enum(['high', 'medium', 'low'])
-  }))
+  })),
+  fetchTimeMs: z.number().optional(),
+  parseTimeMs: z.number().optional(),
+  aiTimeMs: z.number().optional(),
+  totalTimeMs: z.number().optional(),
 });

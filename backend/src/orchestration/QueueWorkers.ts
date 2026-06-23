@@ -112,15 +112,28 @@ export const websiteAuditWorker = new Worker(
     const auditRepository = new AuditRepository();
     let url = job.data.url;
     
+    // Create/Update audit job to RUNNING
+    let auditJobId: string | undefined;
+    const existingJob = await supabase.from('audit_jobs').select('id').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (existingJob.data) {
+      auditJobId = existingJob.data.id;
+      await supabase.from('audit_jobs').update({ status: 'RUNNING', url: url || 'fetching...' }).eq('id', auditJobId);
+    } else {
+      const newJob = await supabase.from('audit_jobs').insert({ company_id: companyId, url: url || 'fetching...', status: 'RUNNING' }).select().maybeSingle();
+      if (newJob.data) auditJobId = newJob.data.id;
+    }
+
     if (!url) {
       const website = await auditRepository.getCompanyWebsite(companyId);
       if (!website) {
         logger.warn({ companyId }, 'Company has no website. Skipping audit.');
+        if (auditJobId) await supabase.from('audit_jobs').update({ status: 'FAILED' }).eq('id', auditJobId);
         // Skip audit, but chain to next step (Buying Signals)
         await buyingSignalsQueue.add('generate-signals', { companyId, traceId });
         return { skipped: true, reason: 'No website URL available' };
       }
       url = website;
+      if (auditJobId) await supabase.from('audit_jobs').update({ url }).eq('id', auditJobId);
     }
     
     const auditService = new AuditService();
@@ -129,6 +142,8 @@ export const websiteAuditWorker = new Worker(
     await auditRepository.saveAuditResult(companyId, result);
     const auditEndTime = Date.now();
     
+    if (auditJobId) await supabase.from('audit_jobs').update({ status: 'COMPLETED' }).eq('id', auditJobId);
+
     // Save extracted company info back to the companies table if present
     if (result.extractedCompanyInfo) {
       const updateData: any = {};
@@ -163,10 +178,19 @@ export const websiteAuditWorker = new Worker(
 );
 
 websiteAuditWorker.on('failed', async (job, err) => {
-  if (job && job.attemptsMade === job.opts.attempts) {
-    const { logger } = createTraceLogger(job.data.traceId);
-    logger.error({ err, companyId: job.data.companyId }, 'Audit job failed permanently. Moving to DLQ.');
-    await failedAuditQueue.add('failed-audit', job.data);
+  if (job) {
+    if (job.data?.companyId) {
+       await supabase.from('audit_jobs')
+         .update({ status: 'FAILED' })
+         .eq('company_id', job.data.companyId)
+         .eq('status', 'RUNNING');
+    }
+    
+    if (job.attemptsMade === job.opts.attempts) {
+      const { logger } = createTraceLogger(job.data.traceId);
+      logger.error({ err, companyId: job.data.companyId }, 'Audit job failed permanently. Moving to DLQ.');
+      await failedAuditQueue.add('failed-audit', job.data);
+    }
   }
 });
 
@@ -281,4 +305,7 @@ attachLifecycleLogs(websiteAuditWorker, 'Website Audit');
 attachLifecycleLogs(aiInsightsWorker, 'AI Insights');
 attachLifecycleLogs(leadScoringWorker, 'Lead Scoring');
 attachLifecycleLogs(buyingSignalsWorker, 'Buying Signals');
+
+console.log('=== ALL BULLMQ WORKERS SUCCESSFULLY REGISTERED ===');
+
 

@@ -153,7 +153,13 @@ export function WebsiteAuditTab({ audit }: WebsiteAuditTabProps) {
               {audit.socialLinksFound.map((link, idx) => (
                 <a key={idx} href={link} target="_blank" rel="noreferrer">
                   <Badge variant="secondary" className="hover:bg-primary/20 cursor-pointer">
-                    {new URL(link).hostname.replace('www.', '')}
+                    {(() => {
+                      try {
+                        return new URL(link).hostname.replace('www.', '');
+                      } catch {
+                        return link;
+                      }
+                    })()}
                   </Badge>
                 </a>
               ))}

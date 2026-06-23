@@ -26,13 +26,31 @@ export class AiInsightsService {
       throw new Error(`Failed to fetch company data: ${error?.message || 'Company not found'}`);
     }
 
+    const industry = company.industry || 'General Business';
+    
+    let industryContext = '';
+    if (industry.toLowerCase().includes('retail') || industry.toLowerCase().includes('e-commerce') || industry.toLowerCase().includes('wholesale')) {
+      industryContext = 'For Retail/Wholesale/E-commerce, suggest services like Inventory Management, POS Integration, and E-commerce Platforms.';
+    } else if (industry.toLowerCase().includes('manufacturing')) {
+      industryContext = 'For Manufacturing, suggest services like ERP Integration, Supply Chain Management Software, and B2B Portals.';
+    } else if (industry.toLowerCase().includes('hospitality')) {
+      industryContext = 'For Hospitality, suggest services like Booking Systems, Guest Portals, and Loyalty Programs.';
+    } else if (industry.toLowerCase().includes('real estate')) {
+      industryContext = 'For Real Estate, suggest services like Property Listing Portals, Virtual Tours, and CRM for Agents.';
+    } else if (industry.toLowerCase().includes('healthcare')) {
+      industryContext = 'For Healthcare, suggest services like Patient Portals, Telemedicine Integration, and HIPAA-compliant CRM.';
+    } else {
+      industryContext = 'Suggest services like Website Development, CRM Development, WhatsApp Automation, AI Chatbot, and SEO depending on their gaps.';
+    }
+
     // 2. Construct Prompt
     const prompt = `
 You are an elite Senior SaaS Sales Consultant. Analyze the following prospect data and provide strategic insights.
 
 COMPANY PROFILE:
 Name: ${company.name}
-Domain: ${company.domain || 'N/A'}
+Domain: ${company.website_url || 'N/A'}
+Industry: ${industry}
 
 INTELLIGENCE DATA:
 ${JSON.stringify(company.company_intelligence || {}, null, 2)}
@@ -40,16 +58,16 @@ ${JSON.stringify(company.company_intelligence || {}, null, 2)}
 WEBSITE AUDIT DATA:
 ${JSON.stringify(company.website_audits || {}, null, 2)}
 
-Analyze their digital maturity and integration gaps (e.g., missing CRM, WhatsApp, Contact Forms, poor SEO).
-Determine what services we should pitch them (e.g., "Website Development", "CRM Development", "WhatsApp Automation", "AI Chatbot", "SEO").
+Analyze their digital maturity and integration gaps based on the audit data.
+${industryContext}
 
 Provide your analysis strictly in the following JSON format:
 {
-  "summary": "A brief 2-3 sentence summary of their digital state.",
+  "summary": "A brief 2-3 sentence summary of their digital state tailored to their industry.",
   "opportunityScore": <integer 0-100, where 100 means they need everything>,
   "servicesNeeded": ["Service 1", "Service 2"],
   "reasoning": "Why you scored them this way and recommended these services.",
-  "recommendedNextAction": "What the sales rep should do next (e.g., 'Send cold email pitching a new website')."
+  "recommendedNextAction": "What the sales rep should do next (e.g., 'Send cold email pitching an ERP system')."
 }
 `;
 

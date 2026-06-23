@@ -26,54 +26,70 @@ interface ContactCandidate {
   department?: string;
   linkedin?: string;
   decision_maker_score: number;
+  confidence_score: number;
   source?: string;
 }
 
 const DECISION_MAKER_KEYWORDS: Record<string, number> = {
   'founder': 100, 'co-founder': 95, 'ceo': 95, 'owner': 95, 
   'chief executive': 95, 'managing director': 90, 'director': 90,
-  'partner': 85, 'doctor': 80, 'psychiatrist': 80, 'psychologist': 80,
-  'vp': 75, 'vice president': 75, 'manager': 70, 
-  'head': 70, 'general manager': 70, 'gm': 70,
+  'partner': 85, 'managing partner': 85, 'president': 90, 'vice president': 75,
+  'vp': 75, 'cto': 90, 'cio': 90, 'coo': 90, 'cfo': 90, 'medical director': 90,
+  'general manager': 70, 'gm': 70, 'branch manager': 70, 'regional manager': 70,
+  'operations manager': 70, 'head of operations': 75, 'sales manager': 70,
+  'marketing manager': 70, 'head of marketing': 75, 'business development manager': 70,
+  'store manager': 70, 'clinic head': 80, 'hr manager': 70,
+  'doctor': 80, 'psychiatrist': 80, 'clinical psychologist': 80,
+  'psychologist': 80, 'dentist': 80,
+  'manager': 70, 'head': 70,
   'consultant': 60, 'principal': 60, 'lead': 50, 'supervisor': 45,
   'coordinator': 30, 'executive': 30, 'associate': 20,
 };
 
 const REJECT_KEYWORDS = [
-  'company', 'agency', 'services', 'clinic', 'centre', 'center', 
+  'company', 'agency', 'services', 'centre', 'center', 
   'foundation', 'associates', 'pvt ltd', 'private limited', 
-  'hospital', 'healthcare', 'counselling', 'counseling', 
-  'psychology', 'therapies', 'mental health', 'diagnostics', 
-  'laboratory', 'labs', 'real estate', 'marketing', 
-  'travels', 'insurance', 'solutions', 'technologies', 'group',
-  'support', 'info', 'hello', 'contact', 'admin', 'sales',
-  'llc', 'inc', 'ltd', 'limited', 'corporation', 'corp', 'team'
+  'group', 'support', 'info', 'hello', 'contact', 'admin', 'sales',
+  'llc', 'inc', 'ltd', 'limited', 'corporation', 'corp', 'team',
+  'office', 'help', 'no-reply', 'noreply', 'billing', 'accounts'
 ];
 
 const ALLOWED_LONG_NAME_PREFIXES = ['dr.', 'mr.', 'mrs.', 'ms.', 'prof.', 'dr'];
+const MARKETING_PHRASES = [
+  'call now', 'get started', 'learn more', 'read more', 'contact us',
+  'shop now', 'buy now', 'team member', 'executive profiles', 'apple fellow',
+  'visit store', 'book appointment', 'book now', 'start today', 'free consultation',
+  'click here', 'our team', 'about us', 'find out more', 'schedule'
+];
 
 export function isValidHumanName(name: string, email?: string): { isValid: boolean; reason?: string } {
+  if (name === 'Business Contact') return { isValid: true };
   if (!name || name.trim().length < 2) return { isValid: false, reason: 'Name too short or empty' };
 
   const lower = name.toLowerCase();
-
-  // Reject generic emails like info@, support@, hello@
-  if (email) {
-    const emailPrefix = email.split('@')[0].toLowerCase();
-    const genericPrefixes = ['info', 'support', 'hello', 'contact', 'admin', 'sales', 'office', 'help'];
-    if (genericPrefixes.includes(emailPrefix)) {
-      return { isValid: false, reason: 'Generic email prefix' };
-    }
-  }
 
   // Reject keyword matches
   for (const keyword of REJECT_KEYWORDS) {
     if (lower.includes(keyword)) return { isValid: false, reason: `Contains rejected keyword: ${keyword}` };
   }
+  for (const phrase of MARKETING_PHRASES) {
+    if (lower.includes(phrase)) return { isValid: false, reason: `Contains marketing phrase: ${phrase}` };
+  }
 
-  // Reject if too many words, unless allowed prefix
+  // Must contain alphabetic characters
+  if (!/[a-zA-Z]/.test(name)) return { isValid: false, reason: 'Contains no alphabetic characters' };
+
+  // Reject names containing numbers (Critical Rule #3)
+  if (/\d/.test(name)) return { isValid: false, reason: 'Contains numbers' };
+
+  // Reject URLs or Emails in name
+  if (name.includes('http') || name.includes('www.') || name.includes('.com') || name.includes('@')) {
+    return { isValid: false, reason: 'Contains URL or email' };
+  }
+
+  // Reject if > 5 words
   const words = name.trim().split(/\s+/);
-  if (words.length > 4) {
+  if (words.length > 5) {
     const hasAllowedPrefix = ALLOWED_LONG_NAME_PREFIXES.some(prefix => lower.includes(prefix));
     if (!hasAllowedPrefix) {
       return { isValid: false, reason: 'Too many words and no allowed prefix' };
@@ -104,6 +120,13 @@ export class ContactDiscoveryService {
       return 0;
     }
 
+    // Rule #6: Company Filtering
+    const SKIP_DOMAINS = ['apple.com', 'google.com', 'microsoft.com', 'meta.com', 'amazon.com', 'samsung.com'];
+    if (company.website_url && SKIP_DOMAINS.some(d => company.website_url.toLowerCase().includes(d))) {
+      console.log(`[FILTER] Skipping discovery for ${company.name} (${company.website_url}) - SMB targeting only.`);
+      return 0;
+    }
+
     const candidates: ContactCandidate[] = [];
 
     // Extract contacts from discovery results raw_data
@@ -119,6 +142,7 @@ export class ContactDiscoveryService {
           email: result.raw_email || undefined,
           title: rawData['Designation'] || undefined,
           decision_maker_score: this.scoreDecisionMaker(rawData['Designation']),
+          confidence_score: 80,
         });
       }
 
@@ -131,6 +155,7 @@ export class ContactDiscoveryService {
             email: result.raw_email,
             phone: result.raw_phone || undefined,
             decision_maker_score: 20,
+            confidence_score: 60,
           });
         }
       }
@@ -188,24 +213,44 @@ export class ContactDiscoveryService {
     }
     
     for (const scraped of allScrapedContacts) {
-      const fullName = scraped.full_name || scraped.name || `${scraped.first_name || ''} ${scraped.last_name || ''}`.trim();
+      let fullName = scraped.full_name || scraped.name || `${scraped.first_name || ''} ${scraped.last_name || ''}`.trim();
+      let email = scraped.email || undefined;
+      let phone = scraped.phone || undefined;
+      let linkedin = scraped.linkedin_url || undefined;
+      let title = scraped.title || undefined;
+
+      let isBusinessContact = false;
+
       if (!fullName) {
-        console.log(`[VALIDATION REJECTED] Rejected Name: [Missing Name] | Reason: Missing Contact Data`);
-        continue;
+        if (!email && !phone && !linkedin) {
+          console.log(`[VALIDATION REJECTED] Rejected Name: [Missing Name] | Reason: Missing Contact Data`);
+          continue;
+        }
+        isBusinessContact = true;
+        fullName = 'Business Contact';
+        title = undefined;
+      } else {
+        const validation = isValidHumanName(fullName, email);
+        if (!validation.isValid) {
+          if (!email && !phone && !linkedin) {
+            console.log(`[VALIDATION REJECTED] Rejected Name: ${fullName} | Reason: ${validation.reason}`);
+            continue;
+          }
+          console.log(`[VALIDATION FALLBACK] Name: ${fullName} fell back to Business Contact | Reason: ${validation.reason}`);
+          isBusinessContact = true;
+          fullName = 'Business Contact';
+          title = undefined;
+        }
       }
       
       // Skip if already in candidates by exact name (case-insensitive) or exact email
-      if (candidates.some(c => 
-        c.name.toLowerCase() === fullName.toLowerCase() || 
-        (scraped.email && c.email === scraped.email)
-      )) {
+      if (isBusinessContact && candidates.some(c => c.name === 'Business Contact' && c.email === email && c.phone === phone && c.linkedin === linkedin)) {
         continue;
       }
-
-      // Validate human name
-      const validation = isValidHumanName(fullName, scraped.email);
-      if (!validation.isValid) {
-        console.log(`[VALIDATION REJECTED] Rejected Name: ${fullName} | Reason: ${validation.reason}`);
+      if (!isBusinessContact && candidates.some(c => 
+        c.name.toLowerCase() === fullName.toLowerCase() || 
+        (email && c.email === email)
+      )) {
         continue;
       }
       
@@ -213,23 +258,24 @@ export class ContactDiscoveryService {
         continue;
       }
 
+      // Rule #5: Confidence
       let confidence = 50;
-      if (scraped.source === 'website_team_page' || scraped.source === 'website_leadership_page') {
-        confidence = 100;
-      } else if (scraped.source === 'website_about_page') {
-        confidence = 90;
-      } else if (scraped.source === 'website_homepage') {
-        confidence = 70;
-      }
+      if (!isBusinessContact && title && (email || phone)) confidence = 95;
+      else if (!isBusinessContact && title && !email && !phone) confidence = 80;
+      else if (isBusinessContact && (email || phone)) confidence = 60;
+      else if (!email && !phone && linkedin) confidence = 50;
+
+      let dmScore = isBusinessContact ? 20 : this.scoreDecisionMaker(title);
 
       candidates.push({
         name: fullName,
-        email: scraped.email || undefined,
-        phone: scraped.phone || undefined,
-        title: scraped.title || undefined,
+        email: email,
+        phone: phone,
+        title: title,
         department: scraped.department || undefined,
-        linkedin: scraped.linkedin_url || undefined,
-        decision_maker_score: confidence || this.scoreDecisionMaker(scraped.title),
+        linkedin: linkedin,
+        decision_maker_score: dmScore,
+        confidence_score: confidence,
         source: scraped.source || undefined,
       });
     }
@@ -241,14 +287,23 @@ export class ContactDiscoveryService {
     const contactInserts: ContactInsert[] = [];
 
     for (const candidate of candidates) {
-      const validation = isValidHumanName(candidate.name);
-      if (!validation.isValid) {
-        continue; // double check before insert
-      }
+      let firstName = '';
+      let lastName = '-';
+      let decisionMakerScore = candidate.decision_maker_score;
 
-      const nameParts = candidate.name.split(' ');
-      const firstName = nameParts[0] || candidate.name;
-      const lastName = nameParts.slice(1).join(' ') || '-';
+      if (candidate.name === 'Business Contact') {
+        firstName = 'Business';
+        lastName = 'Contact';
+        decisionMakerScore = 20;
+      } else {
+        const validation = isValidHumanName(candidate.name);
+        if (!validation.isValid) {
+          continue; // double check before insert
+        }
+        const nameParts = candidate.name.split(' ');
+        firstName = nameParts[0] || candidate.name;
+        lastName = nameParts.slice(1).join(' ') || '-';
+      }
 
       let finalEmail = candidate.email || null;
       let emailVerified = false;
@@ -289,7 +344,7 @@ export class ContactDiscoveryService {
         title: candidate.title || null,
         department: candidate.department || null,
         linkedin_url: candidate.linkedin || null,
-        is_decision_maker: candidate.decision_maker_score >= 80,
+        is_decision_maker: decisionMakerScore >= 80,
         is_primary_contact: false,
         status: 'new',
         email_verified: emailVerified,
@@ -297,7 +352,7 @@ export class ContactDiscoveryService {
         phone_verified: phoneVerified,
         phone_verified_at: phoneVerifiedAt,
         source: candidate.source || null,
-        confidence_score: candidate.decision_maker_score,
+        confidence_score: candidate.confidence_score,
         confidence_reason: candidate.source ? `Matched via ${candidate.source}` : null,
         verification_status: emailVerified || phoneVerified ? 'verified' : 'unverified',
         last_verified_at: emailVerifiedAt || phoneVerifiedAt || null,
@@ -326,9 +381,9 @@ export class ContactDiscoveryService {
 
     console.log('\n--- FREE CONTACT DISCOVERY REPORT ---');
     console.log(`Company: ${company.name}`);
-    console.log(`Pages Crawled: ${pythonMetrics['Pages Crawled'] || 0}`);
-    console.log(`Characters Processed: ${pythonMetrics['Characters Processed'] || 0}`);
-    console.log(`AI Calls: ${pythonMetrics['AI Calls'] || 0}`);
+    console.log(`Pages Crawled: ${pythonMetrics.pages_crawled || 0}`);
+    console.log(`Characters Processed: ${pythonMetrics.characters_processed || 0}`);
+    console.log(`AI Calls: ${pythonMetrics.ai_calls || 0}`);
     console.log(`Contacts Found: ${allScrapedContacts.length}`);
     console.log(`Decision Makers: ${decisionMakersCount}`);
     console.log(`Emails Found: ${emailsFound}`);
@@ -342,11 +397,124 @@ export class ContactDiscoveryService {
   }
 
   /**
+   * Stateless discovery test for the debug dashboard.
+   * Runs the python scraper, maps the names, and returns the contacts without writing to the DB.
+   */
+  async testDiscovery(url: string, options: { quickAudit?: boolean } = { quickAudit: false }): Promise<{ contacts: any[], metrics: any, debug: any }> {
+    const metrics = { timeoutCount: 0, websiteScrapeTime: 0 };
+    let allScrapedContacts: any[] = [];
+    let pythonMetrics: any = {};
+    
+    try {
+      const startTime = Date.now();
+      let companyName = "Unknown Company";
+      try { companyName = new URL(url).hostname.replace('www.', ''); } catch (e) {}
+      
+      const timeoutMs = options.quickAudit ? 20000 : 120000;
+      const enrichmentResult = await this.scrapeWithFreeV3(companyName, url, metrics, timeoutMs, options);
+      allScrapedContacts = enrichmentResult.contacts || [];
+      pythonMetrics = enrichmentResult.metrics || {};
+      metrics.websiteScrapeTime = Date.now() - startTime;
+    } catch (e) {
+      console.error('Test Discovery failed:', e);
+    }
+
+    const candidates: any[] = [];
+    const validationDebug = {
+      pythonContactsFound: allScrapedContacts.length,
+      contactsAfterValidation: 0,
+      contactsRejected: 0,
+      decisionMakersFound: 0,
+      decisionMakersRejected: 0,
+      rejectionReasons: {
+        invalidName: 0,
+        marketingPhrase: 0,
+        missingContactInfo: 0,
+        duplicate: 0
+      },
+      rejectedContacts: [] as any[]
+    };
+
+    for (const scraped of allScrapedContacts) {
+      let fullName = scraped.full_name || scraped.name || `${scraped.first_name || ''} ${scraped.last_name || ''}`.trim();
+      let email = scraped.email || undefined;
+      let phone = scraped.phone || undefined;
+      let linkedin = scraped.linkedin_url || undefined;
+      let title = scraped.title || undefined;
+      let isBusinessContact = false;
+
+      const isDecisionMaker = this.scoreDecisionMaker(title) >= 80;
+
+      if (!fullName) {
+        if (!email && !phone && !linkedin) {
+          validationDebug.contactsRejected++;
+          validationDebug.rejectionReasons.missingContactInfo++;
+          validationDebug.rejectedContacts.push({ originalName: fullName, originalTitle: title, reason: 'Missing Name & Contact Info' });
+          if (isDecisionMaker) validationDebug.decisionMakersRejected++;
+          continue;
+        }
+        isBusinessContact = true;
+        fullName = 'Business Contact';
+        title = undefined;
+      } else {
+        const validation = isValidHumanName(fullName, email);
+        if (!validation.isValid) {
+          validationDebug.contactsRejected++;
+          if (validation.reason?.includes('marketing')) validationDebug.rejectionReasons.marketingPhrase++;
+          else validationDebug.rejectionReasons.invalidName++;
+          
+          validationDebug.rejectedContacts.push({ originalName: fullName, originalTitle: title, email, reason: validation.reason });
+          if (isDecisionMaker) validationDebug.decisionMakersRejected++;
+
+          if (!email && !phone && !linkedin) continue;
+          isBusinessContact = true;
+          fullName = 'Business Contact';
+          title = undefined;
+        }
+      }
+      
+      if (isBusinessContact && candidates.some(c => c.name === 'Business Contact' && c.email === email && c.phone === phone && c.linkedin === linkedin)) {
+        validationDebug.contactsRejected++;
+        validationDebug.rejectionReasons.duplicate++;
+        validationDebug.rejectedContacts.push({ originalName: fullName, originalTitle: title, reason: 'Duplicate Business Contact' });
+        continue;
+      }
+      if (!isBusinessContact && candidates.some(c => c.name.toLowerCase() === fullName.toLowerCase() || (email && c.email === email))) {
+        validationDebug.contactsRejected++;
+        validationDebug.rejectionReasons.duplicate++;
+        validationDebug.rejectedContacts.push({ originalName: fullName, originalTitle: title, reason: 'Duplicate Exact Match' });
+        continue;
+      }
+
+      candidates.push({
+        name: fullName,
+        email: email,
+        phone: phone,
+        title: title,
+        linkedin: linkedin,
+        decision_maker: !isBusinessContact && isDecisionMaker,
+      });
+
+      validationDebug.contactsAfterValidation++;
+      if (!isBusinessContact && isDecisionMaker) validationDebug.decisionMakersFound++;
+    }
+
+    return { 
+      contacts: candidates, 
+      metrics: { ...pythonMetrics, websiteScrapeTime: metrics.websiteScrapeTime, timeoutCount: metrics.timeoutCount },
+      debug: { contactDiscovery: validationDebug }
+    };
+  }
+
+  /**
    * Spawns the free_contact_discovery_v3.py Python script.
    */
-  private scrapeWithFreeV3(companyName: string, website: string, metrics: any): Promise<{contacts: any[], metrics: any, exitCode: number | null, rawStdout: string}> {
+  private scrapeWithFreeV3(companyName: string, website: string, metrics: any, timeoutMs: number = 300000, options: { quickAudit?: boolean } = {}): Promise<{contacts: any[], metrics: any, exitCode: number | null, rawStdout: string}> {
     return new Promise((resolve, reject) => {
       const args = ['free_contact_discovery_v3.py', '--company', companyName, '--website', website];
+      if (options.quickAudit) {
+        args.push('--quick');
+      }
 
       const pythonProcess = spawn(PYTHON_PATH, args, {
         cwd: WORKERS_DIR,
@@ -357,7 +525,7 @@ export class ContactDiscoveryService {
         metrics.timeoutCount++;
         pythonProcess.kill('SIGKILL');
         resolve({ contacts: [], metrics: {}, exitCode: -1, rawStdout: 'TIMEOUT' });
-      }, 300000); // 300 seconds timeout per company
+      }, timeoutMs);
 
       let stdout = '';
       let stderr = '';

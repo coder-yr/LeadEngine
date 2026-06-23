@@ -9,6 +9,7 @@ export function CompanyList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [toastLines, setToastLines] = useState<string[] | null>(null);
 
   useEffect(() => {
     const fetchCompanies = async () => {
@@ -17,23 +18,30 @@ export function CompanyList() {
         const res = await axios.get("http://localhost:3000/api/companies");
         
         // Map backend DB objects to frontend Company schema
-        const mappedCompanies = res.data.map((dbCompany: any) => ({
-          id: dbCompany.id,
-          name: dbCompany.name,
-          website: dbCompany.website_url,
-          industry: dbCompany.industry || 'Unknown',
-          lastAudited: dbCompany.created_at,
-          intelligence: {
-            leadScore: dbCompany.company_intelligence?.[0]?.lead_score || 0,
-            websiteScore: dbCompany.company_intelligence?.[0]?.website_score || 0,
-            socialPresence: dbCompany.company_intelligence?.[0]?.social_profiles?.length > 0,
-            whatsappPresence: dbCompany.company_intelligence?.[0]?.whatsapp_detected || false,
-            crmPresence: dbCompany.company_intelligence?.[0]?.crm_detected || false,
-            bookingPresence: dbCompany.company_intelligence?.[0]?.booking_detected || false,
-            aiInsight: "Backend data mapping complete.",
-            recommendedServices: dbCompany.company_intelligence?.[0]?.services_needed || ["SEO", "Web Dev"]
-          }
-        }));
+        const mappedCompanies = res.data.map((dbCompany: any) => {
+          const activeAuditJob = dbCompany.audit_jobs?.find((j: any) => j.status === 'RUNNING' || j.status === 'PENDING') || dbCompany.audit_jobs?.[0];
+          const hasCompletedAudit = dbCompany.website_audits && dbCompany.website_audits.length > 0;
+          const auditStatus = activeAuditJob?.status || (hasCompletedAudit ? 'COMPLETED' : 'PENDING');
+
+          return {
+            id: dbCompany.id,
+            name: dbCompany.name,
+            website: dbCompany.website_url,
+            industry: dbCompany.industry || 'Unknown',
+            lastAudited: dbCompany.created_at,
+            auditStatus,
+            intelligence: {
+              leadScore: dbCompany.company_intelligence?.[0]?.lead_score || 0,
+              websiteScore: dbCompany.company_intelligence?.[0]?.website_score || 0,
+              socialPresence: dbCompany.company_intelligence?.[0]?.social_profiles?.length > 0,
+              whatsappPresence: dbCompany.company_intelligence?.[0]?.whatsapp_detected || false,
+              crmPresence: dbCompany.company_intelligence?.[0]?.crm_detected || false,
+              bookingPresence: dbCompany.company_intelligence?.[0]?.booking_detected || false,
+              aiInsight: "Backend data mapping complete.",
+              recommendedServices: dbCompany.company_intelligence?.[0]?.services_needed || ["SEO", "Web Dev"]
+            }
+          };
+        });
 
         setCompanies(mappedCompanies);
       } catch (error) {
@@ -44,6 +52,33 @@ export function CompanyList() {
     };
     fetchCompanies();
   }, []);
+
+  const handleDeleteCompany = async (companyId: string) => {
+    if (!window.confirm("Delete this company and all associated data? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const res = await axios.delete(`http://localhost:3000/api/companies/${companyId}`);
+      if (res.data.success) {
+        setCompanies(prev => prev.filter(c => c.id !== companyId));
+        
+        const sum = res.data.summary;
+        const lines = [
+          "Deleted company",
+          `${sum.contactsDeleted || 0} contacts removed`,
+          `${sum.auditsDeleted || 0} audits removed`,
+          `${sum.insightsDeleted || 0} insight removed`
+        ];
+        
+        setToastLines(lines);
+        setTimeout(() => setToastLines(null), 5000);
+      }
+    } catch (error) {
+      console.error("Failed to delete company:", error);
+      alert("Failed to delete company. Check console for details.");
+    }
+  };
 
   const filteredCompanies = companies.filter(company => 
     company.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -92,10 +127,25 @@ export function CompanyList() {
           </div>
         ) : (
           filteredCompanies.map((company, idx) => (
-            <CompanyCard key={company.id || idx} company={company} />
+            <CompanyCard 
+              key={company.id || idx} 
+              company={company} 
+              onDelete={handleDeleteCompany}
+            />
           ))
         )}
       </div>
+
+      {/* Lightweight Toast */}
+      {toastLines && (
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-1 bg-gray-900 text-white p-4 rounded-lg shadow-xl animate-in fade-in slide-in-from-bottom-5">
+          {toastLines.map((line, i) => (
+            <div key={i} className={i === 0 ? "font-bold text-sm mb-1" : "text-xs text-gray-300"}>
+              {line}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

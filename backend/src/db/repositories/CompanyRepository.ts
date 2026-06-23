@@ -1,4 +1,12 @@
 import { supabase } from '../../config/supabase.js';
+import {
+  intelligenceQueue,
+  websiteAuditQueue,
+  aiInsightsQueue,
+  buyingSignalsQueue,
+  contactDiscoveryQueue,
+  leadScoringQueue
+} from '../../orchestration/Queues.js';
 
 export interface CompanyInput {
   name: string;
@@ -8,6 +16,8 @@ export interface CompanyInput {
   industry?: string;
   description?: string;
   status?: 'prospect' | 'active' | 'inactive' | 'churned';
+  discovery_job_id?: string;
+  discovery_source?: string;
 }
 
 export class CompanyRepository {
@@ -108,6 +118,10 @@ export class CompanyRepository {
           audit_summary,
           issues,
           audited_at
+        ),
+        audit_jobs (
+          status,
+          updated_at
         )
       `)
       .order('created_at', { ascending: false });
@@ -167,6 +181,7 @@ export class CompanyRepository {
           no_booking_system
         ),
         website_audits (*),
+        audit_jobs (*),
         contacts (*),
         activities (*)
       `)
@@ -179,5 +194,65 @@ export class CompanyRepository {
     }
 
     return data;
+  }
+
+  /**
+   * Delete a company completely (Cascade)
+   */
+  async deleteCompany(companyId: string) {
+    // 1. Get counts before deletion for the summary
+    const [
+      { count: contactsCount },
+      { count: auditsCount },
+      { count: insightsCount },
+      { count: activitiesCount },
+      { count: tasksCount }
+    ] = await Promise.all([
+      supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
+      supabase.from('website_audits').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
+      supabase.from('company_ai_insights').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
+      supabase.from('activities').select('*', { count: 'exact', head: true }).eq('company_id', companyId),
+      supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('company_id', companyId)
+    ]);
+
+    // 2. Perform Cascade Deletion
+    const { error } = await supabase.from('companies').delete().eq('id', companyId);
+
+    if (error) {
+      console.error(`Error deleting company ${companyId}:`, error);
+      throw error;
+    }
+
+    // 3. Queue Cleanup
+    const queues = [
+      intelligenceQueue,
+      websiteAuditQueue,
+      aiInsightsQueue,
+      buyingSignalsQueue,
+      contactDiscoveryQueue,
+      leadScoringQueue
+    ];
+
+    for (const queue of queues) {
+      try {
+        const jobs = await queue.getJobs(['waiting', 'delayed', 'active']);
+        for (const job of jobs) {
+          if (job.data?.companyId === companyId) {
+            await job.remove();
+          }
+        }
+      } catch (err) {
+        console.error(`Error cleaning up queue ${queue.name} for company ${companyId}:`, err);
+      }
+    }
+
+    return {
+      companyDeleted: true,
+      contactsDeleted: contactsCount || 0,
+      auditsDeleted: auditsCount || 0,
+      insightsDeleted: insightsCount || 0,
+      activitiesDeleted: activitiesCount || 0,
+      tasksDeleted: tasksCount || 0
+    };
   }
 }

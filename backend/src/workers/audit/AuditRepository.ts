@@ -15,7 +15,11 @@ export class AuditRepository {
       has_whatsapp_widget: result.hasWhatsAppWidget,
       social_links_found: result.socialLinksFound,
       audit_summary: result.auditSummary,
-      issues: result.issues
+      issues: result.issues,
+      fetch_time_ms: result.fetchTimeMs || 0,
+      parse_time_ms: result.parseTimeMs || 0,
+      ai_time_ms: result.aiTimeMs || 0,
+      total_time_ms: result.totalTimeMs || 0
     };
 
     const { error } = await supabase
