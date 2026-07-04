@@ -7,6 +7,7 @@ import { ContactInsert } from '../types/contact.js';
 import { EmailDiscoveryService } from './EmailDiscoveryService.js';
 import { PhoneVerificationService } from './PhoneVerificationService.js';
 import { WebsiteNormalizationService } from './WebsiteNormalizationService.js';
+import { normalizeUrl } from '../utils/url.js';
 
 const WORKERS_DIR = path.resolve(process.cwd(), '..', 'workers', 'src');
 
@@ -26,8 +27,18 @@ interface ContactCandidate {
   department?: string;
   linkedin?: string;
   decision_maker_score: number;
+  decision_maker: boolean;
   confidence_score: number;
+  category?: 'validated' | 'probable';
+  candidate_type?: 'PERSON' | 'BUSINESS_SECTION' | 'CTA' | 'MENU_ITEM' | 'MARKETING_COPY';
+  reasons: string[];
   source?: string;
+  sectionType?: string;
+  hasImage?: boolean;
+  hasLinkedin?: boolean;
+  hasEmail?: boolean;
+  hasPhone?: boolean;
+  contactCategory?: 'LEADERSHIP_CONTACT' | 'TEAM_CONTACT' | 'UNKNOWN_CONTACT';
 }
 
 const DECISION_MAKER_KEYWORDS: Record<string, number> = {
@@ -51,7 +62,65 @@ const REJECT_KEYWORDS = [
   'foundation', 'associates', 'pvt ltd', 'private limited', 
   'group', 'support', 'info', 'hello', 'contact', 'admin', 'sales',
   'llc', 'inc', 'ltd', 'limited', 'corporation', 'corp', 'team',
-  'office', 'help', 'no-reply', 'noreply', 'billing', 'accounts'
+  'office', 'help', 'no-reply', 'noreply', 'billing', 'accounts',
+  // New brand/company/non-human keywords
+  'systems', 'technologies', 'technology', 'solutions', 'networks', 
+  'ventures', 'capital', 'holdings', 'industry', 'industries', 
+  'enterprise', 'enterprises', 'partner', 'partners', 'consulting', 
+  'consultancy', 'academy', 'institute', 'institutes', 'university', 
+  'college', 'school', 'schools', 'trust', 'board', 'council', 
+  'clinic', 'clinics', 'hospital', 'hospitals', 'dental', 'medical', 
+  'healthcare', 'care', 'therapy', 'therapies', 'wellness', 'studio', 
+  'studios', 'lab', 'labs', 'hub', 'hubs', 'club', 'clubs', 'society', 
+  'association', 'alliance', 'network', 'brand', 'brands', 'app', 
+  'apps', 'application', 'applications', 'device', 'devices', 
+  'hardware', 'equipment', 'material', 'materials', 'goods', 'item', 
+  'items', 'press', 'media', 'news', 'blog', 'forum', 'channel', 
+  'channels', 'publish', 'publishing', 'publication', 'publications',
+  'award', 'awards', 'prize', 'prizes', 'medal', 'medals', 'honour', 
+  'honours', 'honor', 'honors', 'shri', 'padma', 'ratna', 'nobel',
+  'coach', 'coaches', 'coaching', 'train', 'trainer', 'trainers', 
+  'training', 'course', 'courses', 'class', 'classes'
+];
+
+function hasBrandCasing(word: string): boolean {
+  if (/[a-z][A-Z]/.test(word)) {
+    if (/^(mac|mc)[A-Z]/i.test(word)) {
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+// Phase 1 V5.1: Product/Platform/Feature/Action term blacklist
+// Any candidate whose name contains one of these terms is definitively NOT a human
+const PRODUCT_TERMS = new Set([
+  // Software product names
+  'crm', 'analytics', 'vault', 'publish', 'oneauth', 'books', 'creator',
+  'mail', 'desk', 'assist', 'campaign', 'workflow', 'automation',
+  // Platform / Infrastructure
+  'platform', 'product', 'service', 'solution', 'suite', 'cloud', 'hub',
+  'studio', 'portal', 'engine', 'framework', 'api', 'sdk', 'plugin',
+  // Action / Setup words that appear as product names
+  'setup', 'guide', 'install', 'deploy', 'configure', 'integrate',
+  'dashboard', 'console', 'admin', 'panel', 'module', 'extension',
+  // Zoho-specific and similar SaaS products
+  'invoice', 'inventory', 'recruit', 'survey', 'connect', 'cliq',
+  'meeting', 'webinar', 'sign', 'learn', 'projects', 'sprints', 'bigin',
+  'catalyst', 'appsmith', 'qengine', 'orchestly', 'directory',
+  // Generic product categories
+  'app', 'software', 'tool', 'system', 'payment', 'billing', 'subscription',
+  'enterprise', 'professional', 'premium', 'ultimate', 'basic', 'starter',
+]);
+
+// Phase 2 V5.1: Executive titles that prove a contact is a real decision-maker
+const EXECUTIVE_TITLE_KEYWORDS = [
+  'founder', 'co-founder', 'cofounder', 'ceo', 'coo', 'cto', 'cfo', 'cmo',
+  'president', 'vice president', 'director', 'vp', 'head of', 'head,',
+  'managing director', 'managing partner', 'partner', 'owner', 'chairperson',
+  'doctor', 'dr.', 'dentist', 'psychiatrist', 'psychologist', 'consultant',
+  'manager', 'lead', 'principal', 'chief'
 ];
 
 const ALLOWED_LONG_NAME_PREFIXES = ['dr.', 'mr.', 'mrs.', 'ms.', 'prof.', 'dr'];
@@ -59,41 +128,174 @@ const MARKETING_PHRASES = [
   'call now', 'get started', 'learn more', 'read more', 'contact us',
   'shop now', 'buy now', 'team member', 'executive profiles', 'apple fellow',
   'visit store', 'book appointment', 'book now', 'start today', 'free consultation',
-  'click here', 'our team', 'about us', 'find out more', 'schedule'
+  'click here', 'our team', 'about us', 'find out more',];
+
+const BUSINESS_SECTION_PHRASES = [
+  "web development", "paid advertising", "content creation", "service area",
+  "client outcomes", "how we win", "our origin", "case studies", "testimonials",
+  "success stories", "frequently asked questions", "about us", "services",
+  "precision over volume", "radical transparency", "products", "pricing",
+  "solutions", "partners", "trusted partners", "features", "benefits",
+  "why choose us", "our approach", "our process", "privacy policy"
 ];
 
-export function isValidHumanName(name: string, email?: string): { isValid: boolean; reason?: string } {
+const CTA_PHRASES = [
+  "click here", "buy now", "subscribe", "download", "get a quote", "sign up", "register"
+];
+
+const REJECTED_CONTACT_PHRASES = [
+  "our story",
+  "our doctors",
+  "our clinics",
+  "our team",
+  "our services",
+  "our partners",
+  "our locations",
+  "about us",
+  "contact us",
+  "learn more",
+  "read more",
+  "book appointment",
+  "schedule appointment",
+  "find a doctor",
+  "find doctor",
+  "meet our doctors",
+  "know more",
+  "explore more",
+  "view all",
+  "our treatments",
+  "our specialties",
+  "dental care",
+  "mental health",
+  "healthcare services",
+  "our approach",
+  "our mission",
+  "our vision"
+];
+
+function looksLikeHumanName(name: string): boolean {
+  // Strip out numeric suffixes (like registration IDs or phone numbers that sometimes bleed in)
+  const cleanName = name.replace(/[\d\(\)\-\+]/g, '').trim();
+  const words = cleanName.split(/\s+/).filter(w => w.length > 0);
+
+  if (words.length < 2 || words.length > 4)
+      return false;
+
+  // Allow letters, dots, hyphens, and apostrophes
+  return words.every(word =>
+      /^[A-Za-z\.'-]+$/.test(word)
+  );
+}
+
+function normalizeContactName(name: string): string {
+  let cleanName = name.replace(/[\d\(\)\-\+]/g, '').trim();
+  // Strip trailing titles like ", CEO" or " - Director"
+  cleanName = cleanName.replace(/[,|\-].*/g, '');
+  // Strip parens like "(Founder)"
+  cleanName = cleanName.replace(/\(.*\)/g, '');
+  
+  const words = cleanName.trim().split(/\s+/);
+  // Strip single-letter initials at the end if there are at least 2 other words
+  if (words.length >= 3 && words[words.length - 1].length === 1) {
+    words.pop();
+  }
+  
+  cleanName = words.join(' ');
+  // Strip titles like Dr, Mr, Ms
+  cleanName = cleanName.replace(/\b(dr\.?|mr\.?|mrs\.?|ms\.?|prof\.?)\b/gi, '');
+  
+  // Strip remaining punctuation
+  cleanName = cleanName.replace(/[^a-zA-Z\s-]/g, '').replace(/\s+/g, ' ').trim();
+  
+  return cleanName;
+}
+
+function isValidTitle(title?: string): boolean {
+  if (!title) return true;
+  const lower = title.toLowerCase().trim();
+  if (lower.length > 80) return false;
+  
+  const descriptivePhrases = [
+    'to help', 'insights that', 'our client', 'we are', 'helping you', 
+    'award on', 'award—on', 'on our', 'for our', 'from our'
+  ];
+  if (descriptivePhrases.some(phrase => lower.includes(phrase))) {
+    return false;
+  }
+  
+  const words = lower.split(/\s+/);
+  if (words.length > 8 && !lower.includes('director of') && !lower.includes('head of') && !lower.includes('vice president of')) {
+    return false;
+  }
+  return true;
+}
+
+export function isValidHumanName(name: string, email?: string, websiteUrl?: string): { isValid: boolean; reason?: string } {
   if (name === 'Business Contact') return { isValid: true };
   if (!name || name.trim().length < 2) return { isValid: false, reason: 'Name too short or empty' };
 
   const lower = name.toLowerCase();
 
-  // Reject keyword matches
-  for (const keyword of REJECT_KEYWORDS) {
-    if (lower.includes(keyword)) return { isValid: false, reason: `Contains rejected keyword: ${keyword}` };
-  }
-  for (const phrase of MARKETING_PHRASES) {
-    if (lower.includes(phrase)) return { isValid: false, reason: `Contains marketing phrase: ${phrase}` };
-  }
-
-  // Must contain alphabetic characters
-  if (!/[a-zA-Z]/.test(name)) return { isValid: false, reason: 'Contains no alphabetic characters' };
-
-  // Reject names containing numbers (Critical Rule #3)
-  if (/\d/.test(name)) return { isValid: false, reason: 'Contains numbers' };
-
-  // Reject URLs or Emails in name
-  if (name.includes('http') || name.includes('www.') || name.includes('.com') || name.includes('@')) {
-    return { isValid: false, reason: 'Contains URL or email' };
+  // 1. Check domain token if websiteUrl is provided
+  if (websiteUrl) {
+    try {
+      const hostname = websiteUrl.replace(/https?:\/\//, '').split('/')[0].split(':')[0];
+      const parts = hostname.split('.');
+      if (parts.length > 0) {
+        const domainToken = parts[0].toLowerCase();
+        if (domainToken.length > 2 && domainToken !== 'www') {
+          const nameWords = lower.split(/\s+/);
+          if (nameWords.includes(domainToken)) {
+            return { isValid: false, reason: 'NAME_CONTAINS_DOMAIN_BRAND' };
+          }
+        }
+      }
+    } catch (e) {}
   }
 
-  // Reject if > 5 words
-  const words = name.trim().split(/\s+/);
-  if (words.length > 5) {
-    const hasAllowedPrefix = ALLOWED_LONG_NAME_PREFIXES.some(prefix => lower.includes(prefix));
-    if (!hasAllowedPrefix) {
-      return { isValid: false, reason: 'Too many words and no allowed prefix' };
+  // 2. Check country suffix at the end of the name
+  const words = name.trim().split(/\s+/).filter(w => w.length > 0);
+  if (words.length >= 2) {
+    const lastWordLower = words[words.length - 1].toLowerCase();
+    const countrySuffixes = ['india', 'uk', 'us', 'usa', 'uae'];
+    if (countrySuffixes.includes(lastWordLower)) {
+      return { isValid: false, reason: 'COMPANY_COUNTRY_SUFFIX_DETECTED' };
     }
+  }
+
+  // 3. Reject product/platform/feature names FIRST (highest priority)
+  // Each word of the candidate name is checked individually against PRODUCT_TERMS
+  for (const word of words) {
+    const lowerWord = word.toLowerCase();
+    const cleanWord = lowerWord.replace(/[^a-z]/g, '');
+    if (cleanWord.length > 1 && PRODUCT_TERMS.has(cleanWord)) {
+      return { isValid: false, reason: 'PRODUCT_NAME_DETECTED' };
+    }
+    
+    // 4. CamelCase/PascalCase brand check
+    if (hasBrandCasing(word)) {
+      return { isValid: false, reason: 'BRAND_CASING_DETECTED' };
+    }
+  }
+
+  // Reject keyword matches
+  const nameWords = lower.split(/\s+/).map(w => w.replace(/[^a-z]/g, ''));
+  for (const keyword of REJECT_KEYWORDS) {
+    if (nameWords.includes(keyword)) {
+      return { isValid: false, reason: `Contains rejected keyword: ${keyword}` };
+    }
+  }
+
+  for (const phrase of MARKETING_PHRASES) {
+    if (lower.includes(phrase)) return { isValid: false, reason: `MARKETING_ITEM_DETECTED` };
+  }
+  for (const phrase of REJECTED_CONTACT_PHRASES) {
+    if (lower.includes(phrase)) return { isValid: false, reason: `MENU_ITEM_DETECTED` };
+  }
+
+  // Strict human name detection
+  if (!looksLikeHumanName(name)) {
+    return { isValid: false, reason: `Not a valid human name format` };
   }
 
   // Quality Filter: Reject pipe-separated text or other obviously non-human characters
@@ -103,6 +305,283 @@ export function isValidHumanName(name: string, email?: string): { isValid: boole
 }
 
 export class ContactDiscoveryService {
+  private processScrapedContacts(allScrapedContacts: any[], pythonMetrics: any = {}, websiteUrl?: string): { candidates: ContactCandidate[], validationDebug: any } {
+    const validationDebug = {
+      pythonContactsFound: allScrapedContacts.length,
+      contactsAfterValidation: 0,
+      contactsRejected: 0,
+      decisionMakersFound: 0,
+      decisionMakersRejected: 0,
+      candidateContacts: allScrapedContacts.length,
+      candidatesFromTeam: 0,
+      candidatesFromLeadership: 0,
+      candidatesFromTestimonials: 0,
+      candidatesFromLinkedin: 0,
+      rejectedBySectionFilter: 0,
+      rejectedByHumanValidator: 0,
+      rejectedAsServiceBlocks: 0,
+      rejectedAsMarketingContent: 0,
+      rejectedAsProductNames: 0,       // V5.1 Phase 1
+      rejectedAsUnknownPersons: 0,     // V5.1 Phase 2
+      validatedContacts: 0,
+      rejectedContacts: [] as any[],
+      
+      // New Python Pre-Gen Metrics
+      rawTextNodesScanned: pythonMetrics.rawTextNodesScanned || 0,
+      profileContainersDetected: pythonMetrics.profileContainersDetected || 0,
+      candidatesGenerated: pythonMetrics.candidatesGenerated || allScrapedContacts.length,
+      candidatesRejectedPreGeneration: pythonMetrics.candidatesRejectedPreGeneration || 0,
+      candidatesRejectedAsPhone: pythonMetrics.candidatesRejectedAsPhone || 0,
+      candidatesRejectedAsCTA: pythonMetrics.candidatesRejectedAsCTA || 0,
+      candidatesRejectedAsMarketing: pythonMetrics.candidatesRejectedAsMarketing || 0,
+      candidatesRejectedAsPlaceholder: pythonMetrics.candidatesRejectedAsPlaceholder || 0,
+      candidatesRejectedAsProductNames: pythonMetrics.rejectedAsProductNames || 0,
+      sectionLabelsRejected: pythonMetrics.sectionLabelsRejected || 0,
+      linkedinOwnershipFailures: pythonMetrics.linkedinOwnershipFailures || 0,
+      scoreClampEvents: 0,
+      duplicatesMerged: 0
+    };
+
+    const initialCandidates: ContactCandidate[] = [];
+
+    for (const scraped of allScrapedContacts) {
+      const name = (scraped.name || scraped.full_name || "Business Contact").trim();
+      const title = scraped.title || undefined;
+      const email = scraped.email || undefined;
+      const phone = scraped.phone || undefined;
+      const linkedin = scraped.linkedin || scraped.linkedin_url || undefined;
+      const sectionType = scraped.sectionType || 'UNKNOWN';
+      
+      const hasImage = scraped.hasImage || scraped.has_image || false;
+      const hasLinkedin = scraped.hasLinkedin || scraped.has_linkedin || !!linkedin;
+      const hasEmail = scraped.hasEmail || scraped.has_email || !!email;
+      const hasPhone = scraped.hasPhone || scraped.has_phone || !!phone;
+
+      if (sectionType === 'TEAM_SECTION') validationDebug.candidatesFromTeam++;
+      if (sectionType === 'LEADERSHIP_SECTION') validationDebug.candidatesFromLeadership++;
+      if (sectionType === 'TESTIMONIAL_CARD') validationDebug.candidatesFromTestimonials++;
+      if (sectionType === 'LINKEDIN_PROFILE') validationDebug.candidatesFromLinkedin++;
+
+      // Rejections based on explicit section mapping in Python or generic
+      if (['SERVICE_SECTION', 'FEATURE_SECTION'].includes(sectionType)) {
+        validationDebug.rejectedAsServiceBlocks++;
+        validationDebug.contactsRejected++;
+        validationDebug.rejectedContacts.push({ originalName: name, originalTitle: title, reason: "SERVICE_BLOCK", score: -100, candidate_type: 'BUSINESS_SECTION' });
+        continue;
+      }
+      if (['CTA_SECTION', 'FAQ_SECTION'].includes(sectionType)) {
+        validationDebug.rejectedAsMarketingContent++;
+        validationDebug.contactsRejected++;
+        validationDebug.rejectedContacts.push({ originalName: name, originalTitle: title, reason: "MARKETING_CONTENT", score: -100, candidate_type: 'MARKETING_COPY' });
+        continue;
+      }
+
+      // Title Quality Check
+      if (title && !isValidTitle(title)) {
+        validationDebug.contactsRejected++;
+        validationDebug.rejectedAsMarketingContent++;
+        validationDebug.rejectedContacts.push({ originalName: name, originalTitle: title, reason: "INVALID_TITLE_DETECTED", score: -100, candidate_type: 'MARKETING_COPY' });
+        continue;
+      }
+
+      let score = 0;
+      const reasons: string[] = [];
+      let rejectReason: string | null = null;
+      let rejectScore = 0;
+      let candidateType: 'PERSON' | 'BUSINESS_SECTION' | 'CTA' | 'MENU_ITEM' | 'MARKETING_COPY' = 'PERSON';
+
+      const lowerName = name.toLowerCase();
+
+      // Negative Signals
+      if (BUSINESS_SECTION_PHRASES.some(phrase => lowerName.includes(phrase))) {
+        rejectScore = -80;
+        rejectReason = "SERVICE_NAME";
+        candidateType = 'BUSINESS_SECTION';
+      } else if (CTA_PHRASES.some(phrase => lowerName.includes(phrase))) {
+        rejectScore = -100;
+        rejectReason = "CTA";
+        candidateType = 'CTA';
+      } else if (REJECTED_CONTACT_PHRASES.some(phrase => lowerName.includes(phrase))) {
+        rejectScore = -100;
+        rejectReason = "MENU_ITEM";
+        candidateType = 'MENU_ITEM';
+      } else if (MARKETING_PHRASES.some(phrase => lowerName.includes(phrase))) {
+        rejectScore = -80;
+        rejectReason = "MARKETING_PHRASE";
+        candidateType = 'MARKETING_COPY';
+      } else if (name !== "Business Contact") {
+        const validation = isValidHumanName(name, email, websiteUrl);
+        if (!validation.isValid) {
+          rejectScore = -100;
+          rejectReason = validation.reason || "INVALID_HUMAN_NAME";
+          candidateType = 'MARKETING_COPY';
+        }
+      } else if (name.includes('|')) {
+        rejectScore = -80;
+        rejectReason = "INVALID_CHARACTERS";
+      }
+
+      if (rejectReason) {
+         validationDebug.contactsRejected++;
+         validationDebug.rejectedByHumanValidator++;
+         if (rejectReason === "SERVICE_NAME") validationDebug.rejectedAsServiceBlocks++;
+         else if (['CTA', 'MARKETING_PHRASE', 'GENERIC_PLACEHOLDER', 'INVALID_TITLE_DETECTED'].includes(rejectReason)) validationDebug.rejectedAsMarketingContent++;
+         else if (['PRODUCT_NAME_DETECTED', 'NAME_CONTAINS_DOMAIN_BRAND', 'COMPANY_COUNTRY_SUFFIX_DETECTED', 'BRAND_CASING_DETECTED'].includes(rejectReason)) validationDebug.rejectedAsProductNames++;
+         
+         validationDebug.rejectedContacts.push({ originalName: name, originalTitle: title, reason: rejectReason, score: rejectScore, candidate_type: candidateType });
+         continue;
+      }
+
+      // Positive Signals
+      if (name !== "Business Contact") {
+        score += 30;
+        reasons.push("Human name detected");
+      }
+      if (title && title.trim().length > 0) {
+        score += 25;
+        reasons.push("Professional title detected");
+      }
+      if (sectionType === 'LEADERSHIP_SECTION') {
+        score += 20;
+        reasons.push("Appears in leadership section");
+      }
+      if (sectionType === 'TEAM_SECTION') {
+        score += 20;
+        reasons.push("Appears in team section");
+      }
+      if (hasLinkedin || sectionType === 'LINKEDIN_PROFILE') {
+        score += 20;
+        reasons.push("LinkedIn profile present");
+      }
+      if (hasEmail) {
+        score += 20;
+        reasons.push("Email address present");
+      }
+      if (sectionType === 'PROFILE_CARD' || sectionType === 'AUTHOR_CARD') {
+        score += 15;
+        reasons.push("Appears in profile card");
+      }
+      if (hasImage) {
+        score += 15;
+        reasons.push("Profile image present");
+      }
+      if (hasPhone) {
+        score += 10;
+        reasons.push("Phone number present");
+      }
+      
+      let finalScore = score;
+      if (finalScore > 100) {
+        finalScore = 100;
+        validationDebug.scoreClampEvents++;
+      }
+
+      if (finalScore < 40) {
+        validationDebug.contactsRejected++;
+        validationDebug.rejectedByHumanValidator++;
+        validationDebug.rejectedContacts.push({ originalName: name, originalTitle: title, reason: "LOW_CONFIDENCE", score: finalScore, candidate_type: candidateType });
+        continue;
+      }
+
+      // Clean the final name by stripping out any trailing registration numbers or phone numbers
+      const cleanName = normalizeContactName(name);
+
+      const dmScore = cleanName === "Business Contact" ? 20 : this.scoreDecisionMaker(title);
+      const isDecisionMaker = dmScore >= 60;
+      
+      // Phase 2 V5.1: Executive Evidence Requirement
+      // A contact needs either:
+      //   (a) A recognized leadership section type, OR
+      //   (b) An executive-level title
+      // Without one of these, they are UNKNOWN_PERSON and are rejected.
+      const sectionProven = ['TEAM_SECTION', 'LEADERSHIP_SECTION', 'PROFILE_CARD', 'AUTHOR_CARD', 'TESTIMONIAL_CARD', 'FALLBACK_RELATIONSHIP_SCAN'].includes(sectionType);
+      const lowerTitle = (title || '').toLowerCase();
+      const titleProven = EXECUTIVE_TITLE_KEYWORDS.some(kw => lowerTitle.includes(kw));
+      
+      if (cleanName !== 'Business Contact' && !sectionProven && !titleProven) {
+        validationDebug.contactsRejected++;
+        validationDebug.rejectedAsUnknownPersons++;
+        validationDebug.rejectedContacts.push({ originalName: name, originalTitle: title, reason: 'UNKNOWN_PERSON_NO_EVIDENCE', score: finalScore, candidate_type: candidateType });
+        continue;
+      }
+
+      let contactCategory = 'UNKNOWN_CONTACT';
+      if (dmScore >= 60 || (title && title.toLowerCase().match(/(founder|ceo|coo|cto|cfo|cmo|director|president|vp|partner|owner|chairperson|managing)/))) {
+        contactCategory = 'LEADERSHIP_CONTACT';
+      } else if (title && title.trim() !== '') {
+        contactCategory = 'TEAM_CONTACT';
+      }
+
+      // Phase 5 V5.1: Confidence Score Clamping by contact category
+      let clampedScore = finalScore;
+      if (contactCategory === 'LEADERSHIP_CONTACT' && clampedScore < 70) {
+        clampedScore = 70;
+        validationDebug.scoreClampEvents++;
+      } else if (contactCategory === 'TEAM_CONTACT' && clampedScore < 50) {
+        clampedScore = 50;
+        validationDebug.scoreClampEvents++;
+      }
+
+      initialCandidates.push({
+        name: cleanName,
+        email,
+        phone,
+        title,
+        linkedin,
+        decision_maker_score: dmScore,
+        decision_maker: isDecisionMaker,
+        confidence_score: clampedScore,
+        category: 'validated',
+        candidate_type: candidateType,
+        sectionType: sectionType,
+        reasons: reasons,
+        source: scraped.sourceUrl || scraped.source,
+        contactCategory
+      } as any);
+    }
+
+    // Intelligent Deduplication
+    const deduplicated = new Map<string, ContactCandidate>();
+
+    for (const c of initialCandidates) {
+      const normalizedKey = c.name.toLowerCase();
+
+      if (deduplicated.has(normalizedKey)) {
+        validationDebug.duplicatesMerged++;
+        const existing = deduplicated.get(normalizedKey)!;
+        
+        // Merge attributes prioritizing richest metadata
+        const merged: ContactCandidate = {
+          name: existing.name.length > c.name.length ? existing.name : c.name, // Keep the richer name
+          email: existing.email || c.email,
+          phone: existing.phone || c.phone,
+          title: (existing.title && existing.title.length > (c.title?.length || 0)) ? existing.title : c.title,
+          linkedin: existing.linkedin || c.linkedin,
+          decision_maker_score: Math.max(existing.decision_maker_score, c.decision_maker_score),
+          decision_maker: existing.decision_maker || c.decision_maker,
+          confidence_score: Math.max(existing.confidence_score, c.confidence_score),
+          category: 'validated',
+          candidate_type: existing.candidate_type || c.candidate_type,
+          sectionType: existing.sectionType || c.sectionType,
+          reasons: Array.from(new Set([...existing.reasons, ...c.reasons])),
+          source: existing.source || c.source,
+          contactCategory: existing.decision_maker ? existing.contactCategory : c.contactCategory
+        } as any;
+        
+        deduplicated.set(normalizedKey, merged);
+      } else {
+        deduplicated.set(normalizedKey, c);
+      }
+    }
+
+    const finalCandidates = Array.from(deduplicated.values());
+    
+    validationDebug.validatedContacts = finalCandidates.length;
+    validationDebug.decisionMakersFound = finalCandidates.filter(c => c.decision_maker).length;
+
+    return { candidates: finalCandidates, validationDebug };
+  }
+
   /**
    * Discover and store contacts for a company from its discovery results
    * and any crawled website data.
@@ -136,13 +615,16 @@ export class ContactDiscoveryService {
 
       // If IndiaMart/TradeIndia has Contact Person
       if (rawData['Contact Person']) {
+        const dmScore = this.scoreDecisionMaker(rawData['Designation']);
         candidates.push({
           name: rawData['Contact Person'],
           phone: result.raw_phone || undefined,
           email: result.raw_email || undefined,
           title: rawData['Designation'] || undefined,
-          decision_maker_score: this.scoreDecisionMaker(rawData['Designation']),
+          decision_maker_score: dmScore,
+          decision_maker: dmScore >= 80,
           confidence_score: 80,
+          reasons: ['Found in Discovery Results']
         });
       }
 
@@ -155,7 +637,9 @@ export class ContactDiscoveryService {
             email: result.raw_email,
             phone: result.raw_phone || undefined,
             decision_maker_score: 20,
+            decision_maker: false,
             confidence_score: 60,
+            reasons: ['Extracted from email address']
           });
         }
       }
@@ -173,7 +657,7 @@ export class ContactDiscoveryService {
     let isDirectory = false;
     let officialWebsiteFound: string | null = null;
     let contactDiscoveryAllowed = true;
-    let finalWebsiteUrl = company.website_url;
+    let finalWebsiteUrl = company.website_url ? normalizeUrl(company.website_url) : null;
 
     if (finalWebsiteUrl && websiteNormalizer.isDirectoryDomain(finalWebsiteUrl)) {
       isDirectory = true;
@@ -212,72 +696,13 @@ export class ContactDiscoveryService {
       metrics.websiteScrapeTime = Date.now() - startTime;
     }
     
-    for (const scraped of allScrapedContacts) {
-      let fullName = scraped.full_name || scraped.name || `${scraped.first_name || ''} ${scraped.last_name || ''}`.trim();
-      let email = scraped.email || undefined;
-      let phone = scraped.phone || undefined;
-      let linkedin = scraped.linkedin_url || undefined;
-      let title = scraped.title || undefined;
-
-      let isBusinessContact = false;
-
-      if (!fullName) {
-        if (!email && !phone && !linkedin) {
-          console.log(`[VALIDATION REJECTED] Rejected Name: [Missing Name] | Reason: Missing Contact Data`);
-          continue;
-        }
-        isBusinessContact = true;
-        fullName = 'Business Contact';
-        title = undefined;
-      } else {
-        const validation = isValidHumanName(fullName, email);
-        if (!validation.isValid) {
-          if (!email && !phone && !linkedin) {
-            console.log(`[VALIDATION REJECTED] Rejected Name: ${fullName} | Reason: ${validation.reason}`);
-            continue;
-          }
-          console.log(`[VALIDATION FALLBACK] Name: ${fullName} fell back to Business Contact | Reason: ${validation.reason}`);
-          isBusinessContact = true;
-          fullName = 'Business Contact';
-          title = undefined;
+    const { candidates: newCandidates } = this.processScrapedContacts(allScrapedContacts, pythonMetrics, finalWebsiteUrl || undefined);
+    for (const nc of newCandidates) {
+      if (!candidates.some(c => c.name.toLowerCase() === nc.name.toLowerCase() || (nc.email && c.email === nc.email))) {
+        if (nc.name.toLowerCase() !== company.name.toLowerCase()) {
+          candidates.push(nc);
         }
       }
-      
-      // Skip if already in candidates by exact name (case-insensitive) or exact email
-      if (isBusinessContact && candidates.some(c => c.name === 'Business Contact' && c.email === email && c.phone === phone && c.linkedin === linkedin)) {
-        continue;
-      }
-      if (!isBusinessContact && candidates.some(c => 
-        c.name.toLowerCase() === fullName.toLowerCase() || 
-        (email && c.email === email)
-      )) {
-        continue;
-      }
-      
-      if (fullName.toLowerCase() === company.name.toLowerCase()) {
-        continue;
-      }
-
-      // Rule #5: Confidence
-      let confidence = 50;
-      if (!isBusinessContact && title && (email || phone)) confidence = 95;
-      else if (!isBusinessContact && title && !email && !phone) confidence = 80;
-      else if (isBusinessContact && (email || phone)) confidence = 60;
-      else if (!email && !phone && linkedin) confidence = 50;
-
-      let dmScore = isBusinessContact ? 20 : this.scoreDecisionMaker(title);
-
-      candidates.push({
-        name: fullName,
-        email: email,
-        phone: phone,
-        title: title,
-        department: scraped.department || undefined,
-        linkedin: linkedin,
-        decision_maker_score: dmScore,
-        confidence_score: confidence,
-        source: scraped.source || undefined,
-      });
     }
 
     // Convert candidates to ContactInsert and use ContactRepository
@@ -296,7 +721,7 @@ export class ContactDiscoveryService {
         lastName = 'Contact';
         decisionMakerScore = 20;
       } else {
-        const validation = isValidHumanName(candidate.name);
+        const validation = isValidHumanName(candidate.name, candidate.email, company.website_url || undefined);
         if (!validation.isValid) {
           continue; // double check before insert
         }
@@ -400,12 +825,19 @@ export class ContactDiscoveryService {
    * Stateless discovery test for the debug dashboard.
    * Runs the python scraper, maps the names, and returns the contacts without writing to the DB.
    */
-  async testDiscovery(url: string, options: { quickAudit?: boolean } = { quickAudit: false }): Promise<{ contacts: any[], metrics: any, debug: any }> {
+  async testDiscovery(url: string, options: { quickAudit?: boolean } = { quickAudit: false }): Promise<{ contacts: any[], businessContacts: any[], socialProfiles: any[], contactPages: any[], metrics: any, debug: any }> {
     const metrics = { timeoutCount: 0, websiteScrapeTime: 0 };
     let allScrapedContacts: any[] = [];
+    let businessContacts: any[] = [];
+    let socialProfiles: any[] = [];
+    let contactPages: any[] = [];
     let pythonMetrics: any = {};
+    let pythonSuccess = true;
+    let pythonError = '';
+    const wasNormalized = true; // Since we always normalize
     
     try {
+      url = normalizeUrl(url);
       const startTime = Date.now();
       let companyName = "Unknown Company";
       try { companyName = new URL(url).hostname.replace('www.', ''); } catch (e) {}
@@ -413,95 +845,48 @@ export class ContactDiscoveryService {
       const timeoutMs = options.quickAudit ? 20000 : 120000;
       const enrichmentResult = await this.scrapeWithFreeV3(companyName, url, metrics, timeoutMs, options);
       allScrapedContacts = enrichmentResult.contacts || [];
+      businessContacts = enrichmentResult.businessContacts || [];
+      socialProfiles = enrichmentResult.socialProfiles || [];
+      contactPages = enrichmentResult.contactPages || [];
       pythonMetrics = enrichmentResult.metrics || {};
+      pythonSuccess = enrichmentResult.success !== false;
+      pythonError = enrichmentResult.error || '';
       metrics.websiteScrapeTime = Date.now() - startTime;
     } catch (e) {
       console.error('Test Discovery failed:', e);
+      pythonSuccess = false;
+      pythonError = 'EXCEPTION';
     }
 
-    const candidates: any[] = [];
-    const validationDebug = {
-      pythonContactsFound: allScrapedContacts.length,
-      contactsAfterValidation: 0,
-      contactsRejected: 0,
-      decisionMakersFound: 0,
-      decisionMakersRejected: 0,
-      rejectionReasons: {
-        invalidName: 0,
-        marketingPhrase: 0,
-        missingContactInfo: 0,
-        duplicate: 0
-      },
-      rejectedContacts: [] as any[]
+    const { candidates, validationDebug } = this.processScrapedContacts(allScrapedContacts, pythonMetrics, url);
+
+    let discoveryStatus = "SUCCESS";
+    if (!pythonSuccess) {
+      if (pythonError === 'TIMEOUT') discoveryStatus = 'TIMEOUT';
+      else if (pythonError === 'BLOCKED') discoveryStatus = 'BLOCKED';
+      else discoveryStatus = 'FETCH_FAILED';
+    } else if (candidates.length === 0) {
+      discoveryStatus = 'NO_CONTACTS_FOUND';
+    } else if (pythonMetrics.fallbackCandidatesFound > 0 && pythonMetrics.profileContainersDetected === 0) {
+      // It heavily relied on fallback
+      discoveryStatus = 'SUCCESS'; 
+    }
+
+    const extendedMetrics = {
+      ...pythonMetrics,
+      websiteScrapeTime: metrics.websiteScrapeTime,
+      timeoutCount: metrics.timeoutCount,
+      urlNormalized: wasNormalized,
+      fetchSucceeded: pythonSuccess,
+      discoveryStatus: discoveryStatus
     };
-
-    for (const scraped of allScrapedContacts) {
-      let fullName = scraped.full_name || scraped.name || `${scraped.first_name || ''} ${scraped.last_name || ''}`.trim();
-      let email = scraped.email || undefined;
-      let phone = scraped.phone || undefined;
-      let linkedin = scraped.linkedin_url || undefined;
-      let title = scraped.title || undefined;
-      let isBusinessContact = false;
-
-      const isDecisionMaker = this.scoreDecisionMaker(title) >= 80;
-
-      if (!fullName) {
-        if (!email && !phone && !linkedin) {
-          validationDebug.contactsRejected++;
-          validationDebug.rejectionReasons.missingContactInfo++;
-          validationDebug.rejectedContacts.push({ originalName: fullName, originalTitle: title, reason: 'Missing Name & Contact Info' });
-          if (isDecisionMaker) validationDebug.decisionMakersRejected++;
-          continue;
-        }
-        isBusinessContact = true;
-        fullName = 'Business Contact';
-        title = undefined;
-      } else {
-        const validation = isValidHumanName(fullName, email);
-        if (!validation.isValid) {
-          validationDebug.contactsRejected++;
-          if (validation.reason?.includes('marketing')) validationDebug.rejectionReasons.marketingPhrase++;
-          else validationDebug.rejectionReasons.invalidName++;
-          
-          validationDebug.rejectedContacts.push({ originalName: fullName, originalTitle: title, email, reason: validation.reason });
-          if (isDecisionMaker) validationDebug.decisionMakersRejected++;
-
-          if (!email && !phone && !linkedin) continue;
-          isBusinessContact = true;
-          fullName = 'Business Contact';
-          title = undefined;
-        }
-      }
-      
-      if (isBusinessContact && candidates.some(c => c.name === 'Business Contact' && c.email === email && c.phone === phone && c.linkedin === linkedin)) {
-        validationDebug.contactsRejected++;
-        validationDebug.rejectionReasons.duplicate++;
-        validationDebug.rejectedContacts.push({ originalName: fullName, originalTitle: title, reason: 'Duplicate Business Contact' });
-        continue;
-      }
-      if (!isBusinessContact && candidates.some(c => c.name.toLowerCase() === fullName.toLowerCase() || (email && c.email === email))) {
-        validationDebug.contactsRejected++;
-        validationDebug.rejectionReasons.duplicate++;
-        validationDebug.rejectedContacts.push({ originalName: fullName, originalTitle: title, reason: 'Duplicate Exact Match' });
-        continue;
-      }
-
-      candidates.push({
-        name: fullName,
-        email: email,
-        phone: phone,
-        title: title,
-        linkedin: linkedin,
-        decision_maker: !isBusinessContact && isDecisionMaker,
-      });
-
-      validationDebug.contactsAfterValidation++;
-      if (!isBusinessContact && isDecisionMaker) validationDebug.decisionMakersFound++;
-    }
 
     return { 
       contacts: candidates, 
-      metrics: { ...pythonMetrics, websiteScrapeTime: metrics.websiteScrapeTime, timeoutCount: metrics.timeoutCount },
+      businessContacts,
+      socialProfiles,
+      contactPages,
+      metrics: extendedMetrics,
       debug: { contactDiscovery: validationDebug }
     };
   }
@@ -509,9 +894,9 @@ export class ContactDiscoveryService {
   /**
    * Spawns the free_contact_discovery_v3.py Python script.
    */
-  private scrapeWithFreeV3(companyName: string, website: string, metrics: any, timeoutMs: number = 300000, options: { quickAudit?: boolean } = {}): Promise<{contacts: any[], metrics: any, exitCode: number | null, rawStdout: string}> {
+  private scrapeWithFreeV3(companyName: string, website: string, metrics: any, timeoutMs: number = 300000, options: { quickAudit?: boolean } = {}): Promise<{contacts: any[], businessContacts: any[], socialProfiles: any[], contactPages: any[], metrics: any, exitCode: number | null, rawStdout: string, success?: boolean, error?: string}> {
     return new Promise((resolve, reject) => {
-      const args = ['free_contact_discovery_v3.py', '--company', companyName, '--website', website];
+      const args = ['free_contact_discovery_v3.py', companyName, website];
       if (options.quickAudit) {
         args.push('--quick');
       }
@@ -524,7 +909,7 @@ export class ContactDiscoveryService {
       timeoutId = setTimeout(() => {
         metrics.timeoutCount++;
         pythonProcess.kill('SIGKILL');
-        resolve({ contacts: [], metrics: {}, exitCode: -1, rawStdout: 'TIMEOUT' });
+        resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: -1, rawStdout: 'TIMEOUT', success: false, error: 'TIMEOUT' });
       }, timeoutMs);
 
       let stdout = '';
@@ -541,14 +926,9 @@ export class ContactDiscoveryService {
 
       pythonProcess.on('close', (code, signal) => {
         clearTimeout(timeoutId);
-        if (code !== 0) {
-          if (signal === 'SIGTERM' || signal === 'SIGKILL') {
-            console.error(`Free Contact Discovery v3 timed out after 60s and was killed.`);
-          } else {
-            console.error(`Free Contact Discovery v3 exited with code ${code}`);
-            console.error(`stderr: ${stderr}`);
-          }
-          resolve({ contacts: [], metrics: {}, exitCode: code, rawStdout: stdout });
+        if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+          console.error(`Free Contact Discovery v3 timed out after 60s and was killed.`);
+          resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: -1, rawStdout: stdout, success: false, error: 'TIMEOUT' });
           return;
         }
 
@@ -558,19 +938,31 @@ export class ContactDiscoveryService {
           if (jsonStart !== -1 && jsonEnd !== -1) {
             const jsonStr = stdout.slice(jsonStart, jsonEnd);
             const parsed = JSON.parse(jsonStr);
-            resolve({ contacts: parsed.contacts || [], metrics: parsed.metrics || {}, exitCode: code, rawStdout: stdout });
+            resolve({ 
+              contacts: parsed.contacts || [], 
+              businessContacts: parsed.businessContacts || [],
+              socialProfiles: parsed.socialProfiles || [],
+              contactPages: parsed.contactPages || [],
+              metrics: parsed.metrics || {}, 
+              exitCode: code, 
+              rawStdout: stdout, 
+              success: parsed.success, 
+              error: parsed.error 
+            });
           } else {
-            resolve({ contacts: [], metrics: {}, exitCode: code, rawStdout: stdout });
+            console.error(`Free Contact Discovery v3 exited with code ${code}`);
+            console.error(`stderr: ${stderr}`);
+            resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: code, rawStdout: stdout, success: false, error: 'NO_JSON_FOUND' });
           }
         } catch (parseError) {
           console.error(`Failed to parse Free Contact Discovery v3 output: ${parseError}`);
-          resolve({ contacts: [], metrics: {}, exitCode: code, rawStdout: stdout });
+          resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: code, rawStdout: stdout, success: false, error: 'PARSE_ERROR' });
         }
       });
 
       pythonProcess.on('error', (err) => {
         console.error(`Failed to spawn Free Contact Discovery v3: ${err.message}`);
-        resolve({ contacts: [], metrics: {}, exitCode: -2, rawStdout: `SPAWN ERROR: ${err.message}` });
+        resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: -2, rawStdout: `SPAWN ERROR: ${err.message}`, success: false, error: 'SPAWN_ERROR' });
       });
     });
   }
@@ -649,9 +1041,10 @@ export class ContactDiscoveryService {
     if (!title) return 20;
     const lower = title.toLowerCase().trim();
 
-    for (const [keyword, score] of Object.entries(DECISION_MAKER_KEYWORDS)) {
-      if (lower.includes(keyword)) return score;
-    }
+    if (/(founder|ceo|owner|president|chairman|chief executive)/.test(lower)) return 95;
+    if (/(director|partner|managing director|vp|vice president)/.test(lower)) return 80;
+    if (/(head|lead|manager|principal)/.test(lower)) return 65;
+    if (/(staff|associate|executive|coordinator)/.test(lower)) return 40;
 
     return 20;
   }

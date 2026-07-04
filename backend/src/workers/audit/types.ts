@@ -25,9 +25,11 @@ export interface AuditResult {
     city?: string;
     state_province?: string;
     country?: string;
-    employee_count?: number;
+    employee_count?: string;
     industry?: string;
     industry_confidence?: number;
+    confidence?: number;
+    evidence?: string[];
     description?: string;
     business_model?: string;
     target_audience?: string;

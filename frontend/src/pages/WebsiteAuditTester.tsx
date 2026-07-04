@@ -21,13 +21,19 @@ export default function WebsiteAuditTester() {
     e.preventDefault();
     if (!url) return;
 
+    let normalizedUrl = url;
+    if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
+      normalizedUrl = `https://${normalizedUrl}`;
+      setUrl(normalizedUrl);
+    }
+
     setLoading(true);
     setError(null);
     setResult(null);
 
     try {
       const res = await axios.post("http://localhost:3000/api/audit/test", {
-        url,
+        url: normalizedUrl,
         type: isDeepAudit ? "deep" : "quick"
       });
 
@@ -211,62 +217,216 @@ export default function WebsiteAuditTester() {
 
             {/* TAB: CONTACTS */}
             <TabsContent value="contacts">
-              <Card className="border-border/50">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <div>
-                    <CardTitle>Discovered Contacts</CardTitle>
-                    <CardDescription>Extracted via automated python scraper</CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    <Badge variant="outline" className="bg-primary/5">
-                      {result.contacts?.length || 0} Total
+              <div className="space-y-6">
+                <Card className="border-border/50">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div>
+                      <CardTitle className="text-blue-500 flex items-center gap-2">Leadership & Executives</CardTitle>
+                      <CardDescription>Founders, CEOs, Directors</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-500">
+                      {result.contacts?.filter((c: any) => c.contactCategory === 'LEADERSHIP_CONTACT').length || 0} Found
                     </Badge>
-                    <Badge variant="outline" className="bg-primary/5">
-                      {result.contacts?.filter((c: any) => c.decision_maker).length || 0} Decision Makers
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>LinkedIn</TableHead>
-                        <TableHead className="text-right">Decision Maker</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {result.contacts?.length > 0 ? (
-                        result.contacts.map((contact: any, idx: number) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-medium">{contact.name}</TableCell>
-                            <TableCell>{contact.title || '-'}</TableCell>
-                            <TableCell>{contact.email ? <a href={`mailto:${contact.email}`} className="text-blue-500 hover:underline">{contact.email}</a> : '-'}</TableCell>
-                            <TableCell>{contact.phone || '-'}</TableCell>
-                            <TableCell>
-                              {contact.linkedin ? (
-                                <a href={contact.linkedin} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">Profile</a>
-                              ) : '-'}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {contact.decision_maker ? <Badge className="bg-green-500">Yes</Badge> : <Badge variant="secondary">No</Badge>}
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>LinkedIn</TableHead>
+                          <TableHead>Confidence</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {result.contacts?.filter((c: any) => c.contactCategory === 'LEADERSHIP_CONTACT').length > 0 ? (
+                          result.contacts.filter((c: any) => c.contactCategory === 'LEADERSHIP_CONTACT').map((contact: any, idx: number) => (
+                            <TableRow key={idx}>
+                              <TableCell className="font-medium text-blue-600">{contact.name}</TableCell>
+                              <TableCell>{contact.title || '-'}</TableCell>
+                              <TableCell>{contact.email ? <a href={`mailto:${contact.email}`} className="text-blue-500 hover:underline">{contact.email}</a> : '-'}</TableCell>
+                              <TableCell>{contact.phone || '-'}</TableCell>
+                              <TableCell>
+                                {contact.linkedin ? (
+                                  <a href={contact.linkedin} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">Profile</a>
+                                ) : '-'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className="bg-blue-500/20 text-blue-600 shadow-none hover:bg-blue-500/30">
+                                  {contact.confidence_score}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center h-16 text-muted-foreground">
+                              No leadership contacts found.
                             </TableCell>
                           </TableRow>
-                        ))
-                      ) : (
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/50">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <div>
+                      <CardTitle className="text-emerald-500 flex items-center gap-2">Team Members</CardTitle>
+                      <CardDescription>Other human employees found on the site</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500">
+                      {result.contacts?.filter((c: any) => c.contactCategory === 'TEAM_CONTACT').length || 0} Found
+                    </Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                            No contacts were discovered on this domain.
-                          </TableCell>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Confidence</TableHead>
                         </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {result.contacts?.filter((c: any) => c.contactCategory === 'TEAM_CONTACT').length > 0 ? (
+                          result.contacts.filter((c: any) => c.contactCategory === 'TEAM_CONTACT').map((contact: any, idx: number) => (
+                            <TableRow key={idx}>
+                              <TableCell className="font-medium text-emerald-600">{contact.name}</TableCell>
+                              <TableCell>{contact.title || '-'}</TableCell>
+                              <TableCell>
+                                <Badge className="bg-emerald-500/20 text-emerald-600 shadow-none hover:bg-emerald-500/30">
+                                  {contact.confidence_score}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center h-16 text-muted-foreground">
+                              No team members found.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card className="border-border/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-amber-500">Business & Support Contacts</CardTitle>
+                      <CardDescription>Emails, phones, and WhatsApp extracted from footer and contact pages</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-5 mt-2">
+                        {/* Emails */}
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                            <span className="text-base">📧</span> Email
+                          </p>
+                          {result.businessContacts?.filter((bc: any) => bc.type === 'EMAIL').length > 0 ? (
+                            <div className="space-y-2">
+                              {result.businessContacts.filter((bc: any) => bc.type === 'EMAIL').map((bc: any, idx: number) => (
+                                <div key={idx} className="flex justify-between items-center p-3 border rounded-lg bg-muted/20">
+                                  <a href={`mailto:${bc.value}`} className="text-blue-500 hover:underline font-medium text-sm">{bc.value}</a>
+                                  <Badge variant="secondary" className="text-xs">Footer</Badge>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground pl-1">No email found</p>
+                          )}
+                        </div>
+
+                        {/* Phones */}
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                            <span className="text-base">📞</span> Phone
+                          </p>
+                          {result.businessContacts?.filter((bc: any) => bc.type === 'PHONE').length > 0 ? (
+                            <div className="space-y-2">
+                              {result.businessContacts.filter((bc: any) => bc.type === 'PHONE').map((bc: any, idx: number) => (
+                                <div key={idx} className="flex justify-between items-center p-3 border rounded-lg bg-muted/20">
+                                  <span className="font-medium text-sm">{bc.value}</span>
+                                  <Badge variant="secondary" className="text-xs">Footer</Badge>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground pl-1">No phone found</p>
+                          )}
+                        </div>
+
+                        {/* WhatsApp */}
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                            <span className="text-base">💬</span> WhatsApp
+                          </p>
+                          {result.businessContacts?.filter((bc: any) => bc.type === 'WHATSAPP').length > 0 ? (
+                            <div className="space-y-2">
+                              {result.businessContacts.filter((bc: any) => bc.type === 'WHATSAPP').map((bc: any, idx: number) => (
+                                <div key={idx} className="flex justify-between items-center p-3 border rounded-lg bg-muted/20">
+                                  <a href={bc.value} target="_blank" rel="noreferrer" className="text-green-500 hover:underline font-medium text-sm">{bc.value}</a>
+                                  <Badge variant="secondary" className="text-xs">WhatsApp</Badge>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground pl-1">No WhatsApp found</p>
+                          )}
+                        </div>
+
+                        {/* Address */}
+                        {result.businessContacts?.filter((bc: any) => bc.type === 'ADDRESS').length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                              <span className="text-base">📍</span> Address
+                            </p>
+                            <div className="space-y-2">
+                              {result.businessContacts.filter((bc: any) => bc.type === 'ADDRESS').map((bc: any, idx: number) => (
+                                <div key={idx} className="p-3 border rounded-lg bg-muted/20">
+                                  <span className="text-sm">{bc.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-purple-500">Social Profiles & Contact Pages</CardTitle>
+                      <CardDescription>Discovered social media links and contact forms</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4 mt-2">
+                        {result.socialProfiles?.map((sp: any, idx: number) => (
+                           <div key={`sp-${idx}`} className="p-3 border rounded-lg bg-muted/20 truncate">
+                             <span className="text-xs text-muted-foreground uppercase mr-2">{sp.platform}</span>
+                             <a href={sp.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-500 hover:underline">{sp.url}</a>
+                           </div>
+                        ))}
+                        {result.contactPages?.map((cp: string, idx: number) => (
+                           <div key={`cp-${idx}`} className="p-3 border rounded-lg bg-muted/20 truncate">
+                             <span className="text-xs text-muted-foreground uppercase mr-2">Contact Page</span>
+                             <a href={cp} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-500 hover:underline">{cp}</a>
+                           </div>
+                        ))}
+                        {!result.socialProfiles?.length && !result.contactPages?.length && (
+                          <p className="text-center text-sm text-muted-foreground py-4">No external profiles or contact forms found.</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             </TabsContent>
 
             {/* TAB: TECHNOLOGY */}
@@ -359,8 +519,10 @@ export default function WebsiteAuditTester() {
                         <div>
                           <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1">Industry</p>
                           <Badge variant="outline" className="text-sm py-1">{result.audit.extractedCompanyInfo.industry || 'Unknown'}</Badge>
-                          {result.audit.extractedCompanyInfo.industry_confidence && (
-                            <span className="text-xs text-muted-foreground ml-2">({result.audit.extractedCompanyInfo.industry_confidence}% confidence)</span>
+                          {result.audit.extractedCompanyInfo.confidence && (
+                            <Badge className="ml-2 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 shadow-none">
+                              {result.audit.extractedCompanyInfo.confidence}% Confidence
+                            </Badge>
                           )}
                         </div>
                         <div>
@@ -381,6 +543,20 @@ export default function WebsiteAuditTester() {
                             {result.audit.extractedCompanyInfo.description || "Not found"}
                           </p>
                         </div>
+                        {result.audit.extractedCompanyInfo.evidence?.length > 0 && (
+                          <div className="col-span-2 mt-4">
+                            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                              <Target className="w-4 h-4" /> Classification Evidence
+                            </p>
+                            <div className="bg-primary/5 p-4 rounded-lg border border-primary/20">
+                              <ul className="list-disc pl-5 space-y-2">
+                                {result.audit.extractedCompanyInfo.evidence.map((ev: string, idx: number) => (
+                                  <li key={idx} className="text-sm text-foreground/90">{ev}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -439,6 +615,61 @@ export default function WebsiteAuditTester() {
               </Card>
 
               {/* Contact Validation Observability */}
+              {result.metrics && (
+                <Card className="border-border/50">
+                  <CardHeader>
+                    <CardTitle>Discovery Health Metrics</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Status</p>
+                        <p className={`font-mono font-bold text-lg ${result.metrics?.discoveryStatus === 'SUCCESS' ? 'text-green-500' : 'text-red-500'}`}>
+                          {result.metrics?.discoveryStatus || 'UNKNOWN'}
+                        </p>
+                      </div>
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Fetch Succeeded</p>
+                        <p className="font-mono font-bold text-lg">{result.metrics?.fetchSucceeded ? 'TRUE' : 'FALSE'}</p>
+                      </div>
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Pages Visited</p>
+                        <p className="font-mono font-bold text-lg">{result.metrics?.pagesVisited || 0}</p>
+                      </div>
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Fallback Used</p>
+                        <p className="font-mono font-bold text-lg">{result.metrics?.fallbackCandidatesFound > 0 ? 'TRUE' : 'FALSE'}</p>
+                      </div>
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Footer Detected</p>
+                        <p className="font-mono font-bold text-lg">{result.metrics?.footerDetected ? 'TRUE' : 'FALSE'}</p>
+                      </div>
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Footer Emails</p>
+                        <p className="font-mono font-bold text-lg">{result.metrics?.footerEmailsFound || 0}</p>
+                      </div>
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Footer Phones</p>
+                        <p className="font-mono font-bold text-lg">{result.metrics?.footerPhonesFound || 0}</p>
+                      </div>
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Footer Addresses</p>
+                        <p className="font-mono font-bold text-lg">{result.metrics?.footerAddressesFound || 0}</p>
+                      </div>
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Social Profiles</p>
+                        <p className="font-mono font-bold text-lg">{result.metrics?.socialProfilesFound || 0}</p>
+                      </div>
+                      <div className="bg-muted/30 p-4 rounded-lg border border-border/50 text-center">
+                        <p className="text-sm text-muted-foreground mb-1">Contact Pages</p>
+                        <p className="font-mono font-bold text-lg">{result.metrics?.contactPagesFound || 0}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Contact Validation Observability */}
               {result.debug?.contactDiscovery && (
                 <Card className="border-border/50">
                   <CardHeader>
@@ -446,32 +677,169 @@ export default function WebsiteAuditTester() {
                     <CardDescription>Trace how Python contacts are filtered by the Node.js Engine</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="flex items-center justify-between text-center bg-muted/20 p-6 rounded-lg border border-border/50">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 bg-muted/20 p-6 rounded-lg border border-border/50 text-center">
                       <div>
-                        <p className="text-sm text-muted-foreground uppercase tracking-wide">Python Scraped</p>
-                        <p className="text-3xl font-bold">{result.debug.contactDiscovery.pythonContactsFound}</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Raw Text Nodes</p>
+                        <p className="text-2xl font-bold">{result.debug.contactDiscovery.rawTextNodesScanned || 0}</p>
                       </div>
-                      <div className="text-muted-foreground/50">➔</div>
                       <div>
-                        <p className="text-sm text-red-500 uppercase tracking-wide">Rejected</p>
-                        <p className="text-3xl font-bold text-red-500">{result.debug.contactDiscovery.contactsRejected}</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Profile Containers</p>
+                        <p className="text-2xl font-bold text-blue-400">{result.debug.contactDiscovery.profileContainersDetected || 0}</p>
                       </div>
-                      <div className="text-muted-foreground/50">➔</div>
                       <div>
-                        <p className="text-sm text-green-500 uppercase tracking-wide">Validated</p>
-                        <p className="text-3xl font-bold text-green-500">{result.debug.contactDiscovery.contactsAfterValidation}</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Candidates Generated</p>
+                        <p className="text-2xl font-bold text-indigo-400">{result.debug.contactDiscovery.candidatesGenerated || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Pre-Gen Rejects</p>
+                        <p className="text-2xl font-bold text-yellow-500">{result.debug.contactDiscovery.candidatesRejectedPreGeneration || 0}</p>
+                      </div>
+                      
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Validation Rejects</p>
+                        <p className="text-2xl font-bold text-red-500">{result.debug.contactDiscovery.contactsRejected || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-green-500 uppercase tracking-wide">Final Validated</p>
+                        <p className="text-2xl font-bold text-green-500">{result.debug.contactDiscovery.validatedContacts || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-emerald-500 uppercase tracking-wide">Decision Makers</p>
+                        <p className="text-2xl font-bold text-emerald-500">{result.debug.contactDiscovery.decisionMakersFound || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-purple-500 uppercase tracking-wide">Generator Precision</p>
+                        <p className="text-2xl font-bold text-purple-500">
+                          {result.debug.contactDiscovery.candidatesGenerated > 0 
+                            ? Math.round((result.debug.contactDiscovery.validatedContacts / result.debug.contactDiscovery.candidatesGenerated) * 100) 
+                            : 0}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-orange-500 uppercase tracking-wide">Section Labels Rej.</p>
+                        <p className="text-2xl font-bold text-orange-500">{result.debug.contactDiscovery.sectionLabelsRejected || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-orange-500 uppercase tracking-wide">LinkedIn Identity Fail</p>
+                        <p className="text-2xl font-bold text-orange-500">{result.debug.contactDiscovery.linkedinOwnershipFailures || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-orange-500 uppercase tracking-wide">Score Clamps</p>
+                        <p className="text-2xl font-bold text-orange-500">{result.debug.contactDiscovery.scoreClampEvents || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-orange-500 uppercase tracking-wide">Duplicates Merged</p>
+                        <p className="text-2xl font-bold text-orange-500">{result.debug.contactDiscovery.duplicatesMerged || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-red-600 uppercase tracking-wide font-semibold">Product Names Rej. (Node)</p>
+                        <p className="text-2xl font-bold text-red-600">{result.debug.contactDiscovery.rejectedAsProductNames || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-red-600 uppercase tracking-wide font-semibold">Product Names Rej. (Python)</p>
+                        <p className="text-2xl font-bold text-red-600">{result.debug.contactDiscovery.candidatesRejectedAsProductNames || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">Unknown Persons Rej.</p>
+                        <p className="text-2xl font-bold text-slate-500">{result.debug.contactDiscovery.rejectedAsUnknownPersons || 0}</p>
                       </div>
                     </div>
 
+
+
+                    {result.debug.contactDiscovery.rejectedMenuItems > 0 && (
+                      <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-md">
+                        <h4 className="font-semibold text-yellow-600 flex items-center gap-2 mb-3">
+                          Rejected Menu Items
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {result.debug.contactDiscovery.rejectedContacts
+                            ?.filter((c: any) => c.reason === 'MENU_ITEM_DETECTED')
+                            .map((c: any, idx: number) => (
+                              <div key={idx} className="text-sm bg-background p-2 rounded border">
+                                <span className="font-medium text-foreground">{c.originalName}</span>
+                                {c.originalTitle && <div className="text-xs text-muted-foreground">{c.originalTitle}</div>}
+                                <div className="text-[10px] text-yellow-600 mt-1 uppercase">Reason: MENU_ITEM_DETECTED</div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {result.contacts?.some((c: any) => c.category === 'validated') && (
+                      <div>
+                        <h4 className="font-semibold mb-3 text-green-500">Accepted Contacts Trace</h4>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Name</TableHead>
+                              <TableHead>Title</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Score</TableHead>
+                              <TableHead>Reasons</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {result.contacts.filter((c: any) => c.category === 'validated').map((c: any, idx: number) => (
+                              <TableRow key={idx}>
+                                <TableCell className="font-medium text-green-400">{c.name}</TableCell>
+                                <TableCell>{c.title || '-'}</TableCell>
+                                <TableCell><Badge variant="outline">{c.candidate_type || 'PERSON'}</Badge></TableCell>
+                                <TableCell><Badge className="bg-green-500">{c.confidence_score}</Badge></TableCell>
+                                <TableCell>
+                                  <ul className="list-disc pl-4 text-xs text-muted-foreground">
+                                    {c.reasons?.map((r: string, i: number) => <li key={i}>{r}</li>)}
+                                  </ul>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
+                    {result.contacts?.some((c: any) => c.category === 'probable') && (
+                      <div>
+                        <h4 className="font-semibold mb-3 text-blue-500">Probable Humans Trace</h4>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Name</TableHead>
+                              <TableHead>Title</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Score</TableHead>
+                              <TableHead>Reasons</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {result.contacts.filter((c: any) => c.category === 'probable').map((c: any, idx: number) => (
+                              <TableRow key={idx}>
+                                <TableCell className="font-medium text-blue-400">{c.name}</TableCell>
+                                <TableCell>{c.title || '-'}</TableCell>
+                                <TableCell><Badge variant="outline">{c.candidate_type || 'PERSON'}</Badge></TableCell>
+                                <TableCell><Badge variant="secondary" className="text-blue-500 border-blue-500">{c.confidence_score}</Badge></TableCell>
+                                <TableCell>
+                                  <ul className="list-disc pl-4 text-xs text-muted-foreground">
+                                    {c.reasons?.map((r: string, i: number) => <li key={i}>{r}</li>)}
+                                  </ul>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
                     {result.debug.contactDiscovery.rejectedContacts?.length > 0 && (
                       <div>
-                        <h4 className="font-semibold mb-3">Rejected Contacts Trace</h4>
+                        <h4 className="font-semibold mb-3 text-red-500">Rejected Contacts Trace</h4>
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead>Original Name</TableHead>
                               <TableHead>Original Title</TableHead>
-                              <TableHead>Email</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Score</TableHead>
                               <TableHead>Rejection Reason</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -480,7 +848,8 @@ export default function WebsiteAuditTester() {
                               <TableRow key={idx}>
                                 <TableCell className="font-medium text-red-400">{c.originalName || 'N/A'}</TableCell>
                                 <TableCell>{c.originalTitle || '-'}</TableCell>
-                                <TableCell>{c.email || '-'}</TableCell>
+                                <TableCell><Badge variant="outline">{c.candidate_type || 'UNKNOWN'}</Badge></TableCell>
+                                <TableCell>{c.score}</TableCell>
                                 <TableCell>
                                   <Badge variant="destructive" className="bg-red-500/10 text-red-500 hover:bg-red-500/20">{c.reason}</Badge>
                                 </TableCell>
@@ -521,6 +890,29 @@ export default function WebsiteAuditTester() {
                           <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">{result.debug.ollama.rawOllamaResponse}</pre>
                         </div>
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Extraction Metrics */}
+              {result.metrics && (
+                <Card className="border-border/50">
+                  <CardHeader>
+                    <CardTitle>Ollama Context Pollution Metrics</CardTitle>
+                    <CardDescription>Metrics tracked during python extraction</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-zinc-950 text-zinc-50 p-4 rounded-lg overflow-x-auto overflow-y-auto">
+                      <pre className="text-xs font-mono">
+{JSON.stringify({
+  summaryLength: result.metrics.summaryLength,
+  metaLength: result.metrics.metaLength,
+  heroLength: result.metrics.heroLength,
+  aboutLength: result.metrics.aboutLength,
+  servicesLength: result.metrics.servicesLength
+}, null, 2)}
+                      </pre>
                     </div>
                   </CardContent>
                 </Card>

@@ -1,12 +1,12 @@
 import * as cheerio from 'cheerio';
-import { Ollama } from 'ollama';
 import { AuditResult, AuditIssue } from './types.js';
+import { normalizeUrl } from '../../utils/url.js';
 
 export class AuditService {
-  private readonly ollamaClient: Ollama;
+  private readonly ollamaApiUrl: string;
 
   constructor() {
-    this.ollamaClient = new Ollama({ host: process.env.OLLAMA_API_URL || 'http://localhost:11434' });
+    this.ollamaApiUrl = process.env.OLLAMA_API_URL || 'http://localhost:11434';
   }
   private async fetchWithTimeout(url: string, timeoutMs: number = 10000): Promise<Response> {
     const controller = new AbortController();
@@ -26,32 +26,43 @@ export class AuditService {
     }
   }
 
-  private async findSecondaryPageAndFetch(baseUrl: string, timeoutMs: number): Promise<string> {
-    const CANDIDATES = ['/contact', '/contact-us', '/about', '/services', '/service'];
+  private async fetchHighValuePages(baseUrl: string, html: string, timeoutMs: number): Promise<string[]> {
+    const $ = cheerio.load(html);
+    const links = new Set<string>();
     
-    const checkCandidate = async (path: string) => {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), Math.min(2000, timeoutMs)); 
-      try {
-        const url = new URL(path, baseUrl).toString();
-        const res = await fetch(url, { method: 'HEAD', signal: controller.signal as any });
-        clearTimeout(id);
-        if (res.ok) return url;
-        throw new Error('Not found');
-      } catch (e) {
-        clearTimeout(id);
-        throw e;
-      }
-    };
+    $('a[href]').each((_, el) => {
+        const href = $(el).attr('href');
+        const text = $(el).text().toLowerCase();
+        if (!href) return;
+        
+        if (text.includes('about') || text.includes('service') || text.includes('solution') || 
+            text.includes('practice') || text.includes('department') || text.includes('program') ||
+            href.includes('about') || href.includes('service') || href.includes('solution') || href.includes('practice-areas')) {
+            try {
+                const url = new URL(href, baseUrl).toString();
+                if (url.startsWith(baseUrl)) { // Same domain
+                    links.add(url);
+                }
+            } catch (e) {}
+        }
+    });
 
-    try {
-      const validUrl = await Promise.any(CANDIDATES.map(checkCandidate));
-      const response = await this.fetchWithTimeout(validUrl, timeoutMs);
-      const text = await response.text();
-      return text;
-    } catch (e) {
-      return ''; 
-    }
+    // Score and sort links. Prefer short urls and those containing "about" or "service"
+    const sortedLinks = Array.from(links).sort((a, b) => a.length - b.length);
+    const targetUrls = sortedLinks.slice(0, 2);
+    
+    const pages: string[] = [];
+    await Promise.all(targetUrls.map(async (url) => {
+        try {
+            const res = await this.fetchWithTimeout(url, timeoutMs);
+            if (res.ok) {
+                const pageHtml = await res.text();
+                pages.push(`\n<!-- PAGE: ${url} -->\n${pageHtml}`);
+            }
+        } catch (e) {}
+    }));
+    
+    return pages;
   }
 
   async auditWebsite(url: string, options: { quickAudit?: boolean } = { quickAudit: false }): Promise<AuditResult> {
@@ -60,9 +71,7 @@ export class AuditService {
     let parseTimeMs = 0;
     let aiTimeMs = 0;
 
-    if (!url.startsWith('http')) {
-      url = `https://${url}`;
-    }
+    url = normalizeUrl(url);
 
     let sslEnabled = false;
     let html = '';
@@ -71,33 +80,32 @@ export class AuditService {
     const issues: AuditIssue[] = [];
     
     const fetchStart = performance.now();
-    const fetchTimeout = options.quickAudit ? 5000 : 10000;
+    const fetchTimeout = options.quickAudit ? 15000 : 30000;
     
     try {
-      const [homeResponse, secondaryHtml] = await Promise.all([
-        this.fetchWithTimeout(url, fetchTimeout),
-        this.findSecondaryPageAndFetch(url, fetchTimeout)
-      ]);
-      
+      const homeResponse = await this.fetchWithTimeout(url, fetchTimeout);
       sslEnabled = url.startsWith('https') && homeResponse.ok;
       const homeHtml = await homeResponse.text();
-      html = homeHtml + "\n<!-- SECONDARY PAGE -->\n" + secondaryHtml;
+      const secondaryPages = await this.fetchHighValuePages(url, homeHtml, fetchTimeout);
+      html = homeHtml + secondaryPages.join('');
     } catch (e: any) {
       if (url.startsWith('https://')) {
         const fallbackUrl = url.replace('https://', 'http://');
         try {
-          const [fallbackResponse, secondaryHtml] = await Promise.all([
-            this.fetchWithTimeout(fallbackUrl, fetchTimeout),
-            this.findSecondaryPageAndFetch(fallbackUrl, fetchTimeout)
-          ]);
+          const fallbackResponse = await this.fetchWithTimeout(fallbackUrl, fetchTimeout);
           sslEnabled = false;
           const homeHtml = await fallbackResponse.text();
-          html = homeHtml + "\n<!-- SECONDARY PAGE -->\n" + secondaryHtml;
+          const secondaryPages = await this.fetchHighValuePages(fallbackUrl, homeHtml, fetchTimeout);
+          html = homeHtml + secondaryPages.join('');
         } catch (fallbackError: any) {
-           throw new Error(`Website unreachable: ${e.message}`);
+           console.warn(`Website unreachable on both https and http: ${url}`);
+           html = '';
+           issues.push({ type: 'performance', message: 'Website is unreachable or blocking bots. Audit is limited.', severity: 'high' });
         }
       } else {
-        throw new Error(`Website unreachable: ${e.message}`);
+         console.warn(`Website unreachable: ${url}`);
+         html = '';
+         issues.push({ type: 'performance', message: 'Website is unreachable or blocking bots. Audit is limited.', severity: 'high' });
       }
     }
     fetchTimeMs = Math.round(performance.now() - fetchStart);
@@ -206,24 +214,29 @@ export class AuditService {
       const aiStart = performance.now();
       try {
         // Step 1: Remove Non-Content Elements
-        $('script, style, noscript, iframe, svg, canvas').remove();
+        $('[id*="cookie"], [class*="cookie"], [id*="consent"], [class*="consent"]').remove();
+        $('script, style, noscript, iframe, svg, canvas, img, video').remove();
         $('nav, footer, header').remove();
 
         // Step 2: Prioritize Main Content
-        let websiteText =
-          $('main').text().trim() ||
-          $('article').text().trim() ||
-          $('[role="main"]').text().trim() ||
-          $('body').text().trim();
+        const h1h2 = $('h1, h2').map((_, el) => $(el).text().trim()).get().join(' | ');
+        const metaDesc = $('meta[name="description"]').attr('content') || '';
+        const heroText = $('.hero, #hero').text().trim();
+        
+        let bodyText = $('main').text().trim() || $('article').text().trim() || $('[role="main"]').text().trim() || $('body').text().trim();
+        
+        // Remove repeated text blocks (naive dedup)
+        const textLines = bodyText.split('\n').map(l => l.trim()).filter(l => l.length > 20);
+        const uniqueLines = Array.from(new Set(textLines));
+        bodyText = uniqueLines.join(' ');
 
-        // Step 3: Clean Text
-        websiteText = websiteText
+        // Step 3: Combine and Clean Text
+        let websiteText = `META: ${metaDesc}\nHEADINGS: ${h1h2}\nHERO: ${heroText}\nBODY: ${bodyText}`
           .replace(/\s+/g, ' ')
-          .replace(/\n+/g, ' ')
           .trim();
 
-        // Step 4: Smart Truncation
-        const textForAI = websiteText.slice(0, 8000);
+        // Step 4: Smart Truncation (Avoid OOM on smaller GPUs)
+        const textForAI = websiteText.slice(0, 6000);
 
         // Step 5: Add Debug Metrics
         auditDebug.htmlLength = $.html().length;
@@ -243,67 +256,39 @@ Your job is to analyze website content and extract structured business informati
 
 IMPORTANT RULES:
 
-1. Do NOT invent, assume, hallucinate, or guess information.
-2. Only use information explicitly present in the provided text.
-3. Use best-effort classification.
-Examples:
-psychologist, therapy, counselling, psychiatrist → Mental Health
-dentist, dental clinic → Dental
-lawyer, advocate, law firm → Legal
-ecommerce, online store → Retail
-software, SaaS, platform → Technology
-Only return null when absolutely no evidence exists.
+1. Use semantic understanding. Do not rely on keyword matching.
+2. If enough evidence exists, choose the closest industry from the exact list below.
+3. NEVER return UNKNOWN unless confidence is genuinely 0.
 4. Return valid JSON only.
-5. Industry must be selected from the predefined industry list.
-6. If multiple industries match, choose the strongest match.
-7. Confidence scores must be 0-100.
+5. Provide evidence as an array of explicit phrases or concepts found in the text that support your decision.
+6. Confidence scores must be 0-100.
 
-INDUSTRY LIST:
-
-* Healthcare
-* Mental Health
-* Dental
-* Medical Clinic
-* Hospital
-* Education
-* Coaching & Training
-* Real Estate
-* Construction
-* Interior Design
-* Architecture
-* Legal Services
-* Accounting & Finance
-* Insurance
-* Information Technology
-* Software / SaaS
-* Cybersecurity
-* Digital Marketing
-* Advertising Agency
-* E-commerce
-* Retail
-* Wholesale
-* Manufacturing
-* Logistics & Transportation
-* Automotive
-* Hospitality
-* Restaurant & Food Services
-* Travel & Tourism
-* Beauty & Cosmetics
-* Fitness & Gym
-* Sports
-* Event Management
-* Photography & Media
-* NGO / Non-Profit
-* Government
-* Telecommunications
-* Electronics
-* Home Services
-* Professional Services
-* Consulting
-* Other
+INDUSTRY LIST (You MUST choose EXACTLY one of these or null):
+- Healthcare
+- Mental Health
+- Dental
+- Legal
+- Education
+- Technology
+- Marketing
+- Finance
+- Insurance
+- Real Estate
+- Ecommerce
+- Manufacturing
+- Hospitality
+- Travel
+- Fitness
+- Automotive
+- Construction
+- Retail
+- Consulting
+- Recruitment
+- Nonprofit
+- Government
+- Other
 
 TASKS:
-
 1. Determine Industry
 2. Generate a concise business description
 3. Detect business location if explicitly mentioned
@@ -311,28 +296,13 @@ TASKS:
 5. Detect business model (B2B, B2C, Both, Unknown)
 6. Detect target audience
 7. Estimate company size if explicitly mentioned
-8. Recommend LeadEngine services based on website weaknesses
-
-RECOMMENDED SERVICES:
-
-* Website Development
-* Website Redesign
-* SEO
-* Google Ads
-* Social Media Marketing
-* CRM Development
-* WhatsApp Automation
-* AI Chatbot
-* Booking System Setup
-* Marketing Automation
-* Lead Generation System
-* Analytics Setup
 
 RETURN FORMAT:
 
 {
   "industry": "Industry Name or null",
-  "industry_confidence": 0,
+  "confidence": 95,
+  "evidence": ["evidence 1", "evidence 2"],
   "business_description": "Short description or null",
   "location": "City, Country or null",
   "business_model": "B2B/B2C or null",
@@ -351,14 +321,65 @@ ${textForAI}
         console.log("TEXT LENGTH:", textForAI.length);
         console.log("========================================");
 
-        const response = await this.ollamaClient.generate({
-          model: 'qwen2.5:3b', // Using qwen2.5:3b as default
-          prompt: prompt,
-          format: 'json',
-          stream: false,
-        });
+        const modelName = 'qwen2.5:3b'; // Using qwen2.5:3b as default
+        let modelReloads = 0;
+        try {
+          const psRes = await fetch(`${this.ollamaApiUrl}/api/ps`);
+          if (psRes.ok) {
+            const psData = await psRes.json() as any;
+            const isLoaded = psData.models?.some((m: any) => m.name === modelName);
+            if (!isLoaded) {
+              modelReloads = 1;
+            }
+          }
+        } catch (e) {
+          // Ignore ps error
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds max
+        let res;
+        try {
+          res = await fetch(`${this.ollamaApiUrl}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal as any,
+            body: JSON.stringify({
+              model: modelName,
+              prompt: prompt,
+              format: 'json',
+              stream: false,
+              keep_alive: '24h',
+              options: {
+                num_ctx: 4096
+              }
+            })
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!res.ok) {
+          throw new Error(`Ollama HTTP error! status: ${res.status}`);
+        }
+
+        const response = await res.json() as any;
 
         auditDebug.ollama.rawOllamaResponse = response.response;
+
+        const requestTimeMs = Math.round((response.total_duration || 0) / 1000000);
+        const tokensPerSecond = (response.eval_count && response.eval_duration) ? ((response.eval_count / (response.eval_duration / 1000000000))).toFixed(2) : 0;
+        auditDebug.ollama.instrumentation = {
+          ollamaPersistent: true,
+          modelLoaded: true,
+          modelReloads: modelReloads,
+          requestTimeMs: requestTimeMs,
+          ollama_request_time: requestTimeMs,
+          model_load_time: Math.round((response.load_duration || 0) / 1000000),
+          prompt_tokens: response.prompt_eval_count || 0,
+          completion_tokens: response.eval_count || 0,
+          tokens_per_second: Number(tokensPerSecond)
+        };
 
         try {
           // Sanitize markdown if the LLM wraps the response
@@ -378,7 +399,8 @@ ${textForAI}
             country: undefined,
             employee_count: parsedInfo.company_size || undefined,
             industry: parsedInfo.industry || undefined,
-            industry_confidence: parseInt(parsedInfo.industry_confidence) || undefined,
+            confidence: parseInt(parsedInfo.confidence) || undefined,
+            evidence: Array.isArray(parsedInfo.evidence) ? parsedInfo.evidence : [],
             description: parsedInfo.business_description || undefined,
             business_model: parsedInfo.business_model || undefined,
             target_audience: parsedInfo.target_audience || undefined,

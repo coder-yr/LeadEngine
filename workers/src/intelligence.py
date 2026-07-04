@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import requests
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 
@@ -37,19 +38,6 @@ def analyze_business(business_data: Dict[str, Any]) -> IntelligenceResult:
     - Social Profiles?
     """
     logger.info("Starting intelligence analysis on business data.")
-    
-    # Configure LLM
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if openai_api_key:
-        from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0)
-    else:
-        from langchain_ollama import ChatOllama
-        llm_model = os.getenv("OLLAMA_MODEL", "qwen3:8b")
-        llm_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        # Ensure format="json" is used for consistent JSON output from Ollama
-        llm = ChatOllama(model=llm_model, base_url=llm_base_url, temperature=0, format="json")
-
     parser = JsonOutputParser(pydantic_object=IntelligenceResult)
 
     prompt_template = """
@@ -78,22 +66,57 @@ def analyze_business(business_data: Dict[str, Any]) -> IntelligenceResult:
     {format_instructions}
     """
 
-    prompt = PromptTemplate(
-        template=prompt_template,
-        input_variables=["business_data"],
-        partial_variables={"format_instructions": parser.get_format_instructions()},
-    )
-
-    chain = prompt | llm | parser
-
-    try:
-        data_str = json.dumps(business_data, indent=2)
-        result = chain.invoke({"business_data": data_str})
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if openai_api_key:
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0)
         
-        # Ensure it matches the Pydantic model
-        if isinstance(result, dict):
-            return IntelligenceResult(**result)
-        return result
-    except Exception as e:
-        logger.error(f"Failed to analyze business data: {e}")
-        raise e
+        prompt = PromptTemplate(
+            template=prompt_template,
+            input_variables=["business_data"],
+            partial_variables={"format_instructions": parser.get_format_instructions()},
+        )
+
+        chain = prompt | llm | parser
+
+        try:
+            data_str = json.dumps(business_data, indent=2)
+            result = chain.invoke({"business_data": data_str})
+            
+            # Ensure it matches the Pydantic model
+            if isinstance(result, dict):
+                return IntelligenceResult(**result)
+            return result
+        except Exception as e:
+            logger.error(f"Failed to analyze business data: {e}")
+            raise e
+    else:
+        llm_model = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+        llm_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        
+        prompt_text = prompt_template.format(
+            business_data=json.dumps(business_data, indent=2),
+            format_instructions=parser.get_format_instructions()
+        )
+        payload = {
+            "model": llm_model,
+            "prompt": prompt_text,
+            "format": "json",
+            "stream": False,
+            "keep_alive": "24h"
+        }
+        try:
+            res = requests.post(f"{llm_base_url}/api/generate", json=payload, timeout=60)
+            res.raise_for_status()
+            response_str = res.json().get("response", "")
+            if response_str.startswith("```json"):
+                response_str = response_str.replace("```json", "").replace("```", "").strip()
+            elif response_str.startswith("```"):
+                response_str = response_str.replace("```", "").strip()
+            result = json.loads(response_str)
+            if isinstance(result, dict):
+                return IntelligenceResult(**result)
+            return result
+        except Exception as e:
+            logger.error(f"Failed to analyze business data with Ollama: {e}")
+            raise e

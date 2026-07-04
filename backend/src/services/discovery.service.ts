@@ -60,6 +60,8 @@ export class DiscoveryService {
         status: 'failed',
         error_message: err.message || String(err),
         completed_at: new Date().toISOString(),
+      }).catch((e) => {
+        console.error(`Failed to update status for failed job ${jobId}:`, e);
       });
     });
 
@@ -71,10 +73,15 @@ export class DiscoveryService {
    */
   private async runPipeline(jobId: string, input: DiscoveryJobInput): Promise<void> {
     // Update status to running
-    await this.jobRepo.updateStatus(jobId, {
+    const job = await this.jobRepo.updateStatus(jobId, {
       status: 'running',
       started_at: new Date().toISOString(),
     });
+
+    if (!job) {
+      console.warn(`[Discovery Service] Job ${jobId} not found (likely deleted). Aborting pipeline.`);
+      return;
+    }
 
     // 1. Run Python discovery runner
     const runnerOutput = await this.spawnDiscoveryRunner({

@@ -1,11 +1,10 @@
-import { Ollama } from 'ollama';
 import { supabase } from '../config/supabase.js';
 
 export class AgentService {
-  private ollama: Ollama;
+  private ollamaApiUrl: string;
 
   constructor() {
-    this.ollama = new Ollama({ host: 'http://127.0.0.1:11434' });
+    this.ollamaApiUrl = process.env.OLLAMA_API_URL || 'http://127.0.0.1:11434';
   }
 
   async generateResponse(companyId: string, message: string, model: string = 'qwen3:8b') {
@@ -65,14 +64,25 @@ Guidelines:
 
     // 3. Call Ollama
     try {
-      const response = await this.ollama.chat({
-        model: model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: message }
-        ],
-        stream: false
+      const res = await fetch(`${this.ollamaApiUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: message }
+          ],
+          stream: false,
+          keep_alive: '24h'
+        })
       });
+
+      if (!res.ok) {
+        throw new Error(`Ollama HTTP error! status: ${res.status}`);
+      }
+
+      const response = await res.json() as any;
 
       return {
         response: response.message.content,

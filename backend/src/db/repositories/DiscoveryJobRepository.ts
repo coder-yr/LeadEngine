@@ -43,7 +43,7 @@ export class DiscoveryJobRepository {
       .update(updates)
       .eq('id', jobId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error(`Error updating discovery job ${jobId}:`, error);

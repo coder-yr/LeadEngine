@@ -123,17 +123,6 @@ def extract_and_detect_content(url: str) -> Tuple[int, bool, bool]:
             "whatsapp_mentioned": wa_heuristic
         }
         
-        # Use LLM to definitively detect
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if openai_api_key:
-            from langchain_openai import ChatOpenAI
-            llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0)
-        else:
-            from langchain_ollama import ChatOllama
-            llm_model = os.getenv("OLLAMA_MODEL", "qwen3:8b")
-            llm_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            llm = ChatOllama(model=llm_model, base_url=llm_base_url, temperature=0, format="json")
-
         parser = JsonOutputParser(pydantic_object=LLMWidgetDetection)
         prompt_template = """
         You are a website auditor. Based on the following HTML snippets and metadata extracted from a website, 
@@ -144,14 +133,47 @@ def extract_and_detect_content(url: str) -> Tuple[int, bool, bool]:
         
         {format_instructions}
         """
-        prompt = PromptTemplate(
-            template=prompt_template,
-            input_variables=["data"],
-            partial_variables={"format_instructions": parser.get_format_instructions()},
-        )
-        chain = prompt | llm | parser
-        
-        detection = chain.invoke({"data": json.dumps(content_summary)})
+
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if openai_api_key:
+            from langchain_openai import ChatOpenAI
+            llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0)
+
+            prompt = PromptTemplate(
+                template=prompt_template,
+                input_variables=["data"],
+                partial_variables={"format_instructions": parser.get_format_instructions()},
+            )
+            chain = prompt | llm | parser
+            
+            detection = chain.invoke({"data": json.dumps(content_summary)})
+        else:
+            llm_model = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+            llm_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            
+            prompt_text = prompt_template.format(
+                data=json.dumps(content_summary),
+                format_instructions=parser.get_format_instructions()
+            )
+            payload = {
+                "model": llm_model,
+                "prompt": prompt_text,
+                "format": "json",
+                "stream": False,
+                "keep_alive": "24h"
+            }
+            try:
+                res = requests.post(f"{llm_base_url}/api/generate", json=payload, timeout=60)
+                res.raise_for_status()
+                response_str = res.json().get("response", "")
+                if response_str.startswith("```json"):
+                    response_str = response_str.replace("```json", "").replace("```", "").strip()
+                elif response_str.startswith("```"):
+                    response_str = response_str.replace("```", "").strip()
+                detection = json.loads(response_str)
+            except Exception as e:
+                logger.error(f"Ollama API Error: {e}")
+                detection = {}
         
         has_form = detection.get("has_contact_form", False)
         has_wa = detection.get("has_whatsapp_widget", False)

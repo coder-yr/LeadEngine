@@ -1,5 +1,4 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Ollama } from 'ollama';
 import { AiInsightsRepository } from './AiInsightsRepository.js';
 import { AiInsightResult } from './AiInsightsTypes.js';
 
@@ -7,7 +6,7 @@ export class AiInsightsService {
   constructor(
     private readonly supabase: SupabaseClient,
     private readonly repository: AiInsightsRepository,
-    private readonly ollamaClient: Ollama = new Ollama({ host: 'http://localhost:11434' })
+    private readonly ollamaApiUrl: string = 'http://localhost:11434'
   ) {}
 
   async generateInsight(companyId: string, model: string = 'qwen3:8b') {
@@ -73,16 +72,33 @@ Provide your analysis strictly in the following JSON format:
 
     // 3. Call Ollama
     let responseText = '';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 seconds max timeout
     try {
-      const response = await this.ollamaClient.generate({
-        model: model,
-        prompt: prompt,
-        format: 'json',
-        stream: false,
+      const res = await fetch(`${this.ollamaApiUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal as any,
+        body: JSON.stringify({
+          model: model,
+          prompt: prompt,
+          format: 'json',
+          stream: false,
+          keep_alive: '24h',
+          options: {
+            num_ctx: 4096
+          }
+        })
       });
+      if (!res.ok) {
+         throw new Error(`Ollama HTTP error! status: ${res.status}`);
+      }
+      const response = await res.json() as any;
       responseText = response.response;
     } catch (ollamaError: any) {
       throw new Error(`Ollama API Error: ${ollamaError.message}`);
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     // 4. Parse Result

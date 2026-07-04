@@ -27,7 +27,7 @@ import { BuyingSignalsService } from '../workers/buying-signals/BuyingSignalsSer
 import { outreachWorker } from '../workers/outreach/OutreachEngineWorker.js';
 import { ContactDiscoveryService } from '../services/ContactDiscoveryService.js';
 import { LeadScoringService } from '../services/LeadScoringService.js';
-import { Ollama } from 'ollama';
+
 
 // We import outreachWorker here to ensure it initializes and starts processing.
 // Export it if needed
@@ -205,8 +205,7 @@ export const aiInsightsWorker = new Worker(
     
     const aiInsightsRepository = new AiInsightsRepository(supabase);
     const ollamaUrl = process.env.OLLAMA_API_URL || 'http://localhost:11434';
-    const ollamaClient = new Ollama({ host: ollamaUrl });
-    const aiInsightsService = new AiInsightsService(supabase, aiInsightsRepository, ollamaClient);
+    const aiInsightsService = new AiInsightsService(supabase, aiInsightsRepository, ollamaUrl);
     
     const model = job.data.model || process.env.OLLAMA_MODEL || 'qwen3:8b';
     const result = await aiInsightsService.generateInsight(companyId, model);
