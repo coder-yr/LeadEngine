@@ -18,8 +18,18 @@ from bs4 import BeautifulSoup
 
 from discovery.base_source import BaseDiscoverySource, DiscoveryRecord
 from discovery.anti_block import random_user_agent
+from discovery.sources.ddg_parser import dork_search
 
 logger = logging.getLogger(__name__)
+
+# IndiaMART category mapping to improve search hit rate
+CATEGORY_MAPPING = {
+    "dentist": "dental equipment",
+    "doctor": "medical equipment",
+    "hospital": "hospital equipment",
+    "restaurant": "restaurant equipment",
+    "architect": "architectural services",
+}
 
 
 class IndiaMARTRSSSource(BaseDiscoverySource):
@@ -27,21 +37,31 @@ class IndiaMARTRSSSource(BaseDiscoverySource):
     tier = 2
     reliability_stars = 3
 
-    async def search(self, keyword: str, city: str, max_results: int) -> List[DiscoveryRecord]:
-        extracted: List[DiscoveryRecord] = []
+    async def search(self, keyword: str, city: str, max_results: int, **kwargs) -> List[DiscoveryRecord]:
+        extracted = self._search_indiamart(keyword, city, max_results)
 
-        # Primary: IndiaMART search page
-        primary = self._search_indiamart(keyword, city, max_results)
-        extracted.extend(primary)
-
-        # Fallback: Google-indexed IndiaMART pages via DuckDuckGo
         if len(extracted) < max_results // 2:
-            dork_results = self._dork_indiamart(keyword, city, max_results)
-            seen = {r.business_name.lower() for r in extracted}
-            for rec in dork_results:
-                if rec.business_name.lower() not in seen:
+            logger.info(f"[indiamart_rss] Direct search yielded {len(extracted)}, trying dork fallback")
+            dork_results = dork_search(
+                site="indiamart.com",
+                keyword=keyword,
+                city=city,
+                max_results=max_results - len(extracted)
+            )
+            
+            seen_names = {r.business_name.lower() for r in extracted}
+            for dr in dork_results:
+                clean_name = self._clean_name(dr.title)
+                if clean_name and clean_name.lower() not in seen_names:
+                    seen_names.add(clean_name.lower())
+                    rec = DiscoveryRecord(
+                        business_name=clean_name,
+                        source=self.name,
+                        phone=dr.phone,
+                        raw_data={"indiamart_url": dr.url, "via": "dork"}
+                    )
+                    rec.quality_score = 10 + (20 if dr.phone else 0)
                     extracted.append(rec)
-                    seen.add(rec.business_name.lower())
 
         logger.info(f"[indiamart_rss] {len(extracted)} results")
         return extracted[:max_results]
@@ -49,8 +69,10 @@ class IndiaMARTRSSSource(BaseDiscoverySource):
     def _search_indiamart(self, keyword: str, city: str, max_results: int) -> List[DiscoveryRecord]:
         records: List[DiscoveryRecord] = []
         try:
-            query = urllib.parse.quote(f"{keyword} {city}")
+            mapped_kw = CATEGORY_MAPPING.get(keyword.lower().strip(), keyword)
+            query = urllib.parse.quote(f"{mapped_kw} {city}")
             url = f"https://www.indiamart.com/search.mp?ss={query}"
+            
             headers = {
                 "User-Agent": random_user_agent(),
                 "Accept": "text/html",
@@ -63,11 +85,11 @@ class IndiaMARTRSSSource(BaseDiscoverySource):
 
             soup = BeautifulSoup(resp.text, "html.parser")
 
-            # IndiaMART listing cards
             cards = soup.find_all("div", class_=re.compile(r"(listing|dealer|supplier)", re.I))
             for card in cards[:max_results]:
                 name_el = card.find(["h2", "h3", "a"], class_=re.compile(r"(company|name|title)", re.I))
-                name = name_el.get_text(strip=True) if name_el else None
+                raw_name = name_el.get_text(strip=True) if name_el else None
+                name = self._clean_name(raw_name) if raw_name else None
                 if not name:
                     continue
 
@@ -94,28 +116,13 @@ class IndiaMARTRSSSource(BaseDiscoverySource):
 
         except Exception as exc:
             logger.debug(f"[indiamart_rss] Search failed: {exc}")
+            
         return records
 
-    def _dork_indiamart(self, keyword: str, city: str, max_results: int) -> List[DiscoveryRecord]:
-        records: List[DiscoveryRecord] = []
-        try:
-            query = urllib.parse.quote(f'site:indiamart.com "{keyword}" "{city}"')
-            url = f"https://html.duckduckgo.com/html/?q={query}"
-            headers = {"User-Agent": random_user_agent()}
-            resp = requests.get(url, headers=headers, timeout=10)
-            soup = BeautifulSoup(resp.text, "html.parser")
-            for result in soup.find_all("div", class_="result")[:max_results]:
-                title_el = result.find("a", class_="result__title")
-                title = title_el.get_text(strip=True) if title_el else ""
-                name = re.split(r"[|\-–]", title)[0].strip()
-                if name:
-                    rec = DiscoveryRecord(
-                        business_name=name,
-                        source=self.name,
-                        raw_data={"via": "dork"},
-                    )
-                    rec.quality_score = 10
-                    records.append(rec)
-        except Exception as exc:
-            logger.debug(f"[indiamart_rss] Dork fallback failed: {exc}")
-        return records
+    def _clean_name(self, name: str) -> str:
+        """Strip IndiaMART suffixes."""
+        if not name:
+            return ""
+        clean = re.split(r"\s+-\s+(Manufacturer|Supplier|Wholesaler|Retailer|Exporter|Importer)", name, flags=re.IGNORECASE)[0]
+        clean = re.split(r"\|", clean)[0]
+        return clean.strip()

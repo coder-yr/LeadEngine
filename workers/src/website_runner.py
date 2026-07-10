@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import sys
+import asyncio
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,9 +35,9 @@ def main():
         sys.exit(1)
 
     try:
-        from intelligence.website_intelligence import WebsiteIntelligencePipeline
-        pipeline = WebsiteIntelligencePipeline(timeout=30)
-        doc = pipeline.run(url)
+        from intelligence.website_intelligence_v2 import WebsiteIntelligencePipelineV2
+        pipeline = WebsiteIntelligencePipelineV2(max_pages=5)
+        doc = asyncio.run(pipeline.run(url))
         print(json.dumps({
             "status": "completed" if doc.fetch_status == 200 else "failed",
             "document": doc.to_provenance_dict(),

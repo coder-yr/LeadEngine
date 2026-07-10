@@ -1,6 +1,13 @@
 """
 google_maps.py — Tier 1 Google Maps source adapter.
-Migrated from gmaps_scraper.py into the plugin architecture.
+
+Production-grade implementation with:
+  - Adaptive infinite scrolling (stops when no new results appear)
+  - Category extraction from side panel
+  - Website URL cleanup (strips Google redirects)
+  - Per-listing retry on extraction failure
+  - In-session duplicate detection by name
+  - Robust error handling per listing (never crashes the batch)
 """
 
 from __future__ import annotations
@@ -9,21 +16,26 @@ import asyncio
 import logging
 import os
 import random
+import re
 import urllib.parse
-from typing import List, Optional
+from typing import List, Optional, Set
 
-from playwright.async_api import async_playwright, Page
+from playwright.async_api import async_playwright, Page, Locator
 
 from discovery.base_source import BaseDiscoverySource, DiscoveryRecord
 from discovery.anti_block import (
     STEALTH_SCRIPT, random_user_agent, random_viewport,
-    human_delay, short_delay, random_scroll,
+    human_delay, short_delay,
 )
 
 logger = logging.getLogger(__name__)
 
-SCROLL_PAUSE_MS = 1800
-MAX_SCROLL_ATTEMPTS = 18
+# Scrolling config
+SCROLL_PAUSE_MS = 2000
+MAX_SCROLL_STALLS = 4          # Stop after N consecutive scrolls with 0 new listings
+MAX_SCROLL_ABSOLUTE = 40       # Hard ceiling to prevent infinite loops
+LISTING_CLICK_TIMEOUT = 1500   # ms to wait for side panel after click
+PANEL_LOAD_WAIT = 1200         # ms to wait for panel data to render
 
 
 class GoogleMapsSource(BaseDiscoverySource):
@@ -31,7 +43,7 @@ class GoogleMapsSource(BaseDiscoverySource):
     tier = 1
     reliability_stars = 5
 
-    async def search(self, keyword: str, city: str, max_results: int) -> List[DiscoveryRecord]:
+    async def search(self, keyword: str, city: str, max_results: int, **kwargs) -> List[DiscoveryRecord]:
         query = urllib.parse.quote(f"{keyword} {city}")
         url = f"https://www.google.com/maps/search/{query}"
         extracted: List[DiscoveryRecord] = []
@@ -60,31 +72,40 @@ class GoogleMapsSource(BaseDiscoverySource):
                     try:
                         logger.info(f"[google_maps] Navigating (attempt {attempt + 1})")
                         await page.goto(url, wait_until="domcontentloaded", timeout=60_000)
-                        await human_delay(1000, 2000)
+                        await human_delay(1500, 3000)
 
+                        # Wait for the results feed
                         feed_selector = 'div[role="feed"]'
                         try:
                             await page.wait_for_selector(feed_selector, timeout=15_000)
                         except Exception:
                             logger.warning("[google_maps] Feed not found, continuing anyway")
 
+                        # Adaptive scrolling
                         listings_selector = ".hfpxzc, a[href*='/maps/place/']"
-                        initial_count = len(await page.locator(listings_selector).all())
-                        if initial_count < max_results:
-                            await self._scroll_feed(page, feed_selector, max_results)
+                        await self._adaptive_scroll(page, feed_selector, listings_selector, max_results)
 
+                        # Collect all listing elements
                         listings = await page.locator(listings_selector).all()
-                        logger.info(f"[google_maps] Found {len(listings)} listings")
+                        logger.info(f"[google_maps] Found {len(listings)} listings after scrolling")
 
-                        for listing in listings[:max_results]:
-                            rec = await self._extract_listing(page, listing)
-                            if rec:
-                                extracted.append(rec)
+                        # Extract data from each listing
+                        seen_names: Set[str] = set()
+                        for i, listing in enumerate(listings):
                             if len(extracted) >= max_results:
                                 break
 
+                            rec = await self._extract_with_retry(page, listing, seen_names)
+                            if rec:
+                                extracted.append(rec)
+
+                            # Log progress every 20 listings
+                            if (i + 1) % 20 == 0:
+                                logger.info(f"[google_maps] Progress: {len(extracted)} extracted from {i + 1} listings")
+
                         if extracted:
                             break  # Success — no need to retry
+
                     finally:
                         await browser.close()
 
@@ -96,38 +117,100 @@ class GoogleMapsSource(BaseDiscoverySource):
         logger.info(f"[google_maps] Completed: {len(extracted)} results")
         return extracted
 
-    async def _scroll_feed(self, page: Page, selector: str, target: int) -> None:
-        scrolls = min(MAX_SCROLL_ATTEMPTS, (target // 5) + 3)
-        for i in range(scrolls):
+    async def _adaptive_scroll(
+        self, page: Page, feed_selector: str, listings_selector: str, target: int
+    ) -> None:
+        """
+        Scroll the feed until:
+          - We have enough listings (>= target)
+          - OR we hit MAX_SCROLL_STALLS consecutive scrolls with 0 new listings
+          - OR we hit the absolute scroll ceiling
+          - OR we see the "end of results" marker
+        """
+        prev_count = len(await page.locator(listings_selector).all())
+        stalls = 0
+
+        for scroll_num in range(MAX_SCROLL_ABSOLUTE):
+            # Scroll to bottom of feed
             await page.evaluate(
-                f"const f = document.querySelector('{selector}'); if (f) f.scrollTop = f.scrollHeight;"
+                f"const f = document.querySelector('{feed_selector}'); if (f) f.scrollTop = f.scrollHeight;"
             )
-            await page.wait_for_timeout(SCROLL_PAUSE_MS)
-            if await page.query_selector("span.HlvSq"):
+            await page.wait_for_timeout(SCROLL_PAUSE_MS + random.randint(0, 500))
+
+            # Check for "end of results" marker
+            end_marker = await page.query_selector("span.HlvSq, p.fontBodyMedium > span:has-text('end of results')")
+            if end_marker:
+                logger.info(f"[google_maps] End of results reached at scroll {scroll_num + 1}")
                 break
 
-    async def _extract_listing(self, page: Page, listing) -> Optional[DiscoveryRecord]:
+            # Count current listings
+            current_count = len(await page.locator(listings_selector).all())
+            new_found = current_count - prev_count
+
+            if new_found == 0:
+                stalls += 1
+                if stalls >= MAX_SCROLL_STALLS:
+                    logger.info(
+                        f"[google_maps] Stopping scroll: {stalls} consecutive stalls "
+                        f"at {current_count} listings (scroll {scroll_num + 1})"
+                    )
+                    break
+            else:
+                stalls = 0  # Reset stall counter
+
+            prev_count = current_count
+
+            # Stop if we have enough
+            if current_count >= target:
+                logger.info(f"[google_maps] Target reached: {current_count} >= {target}")
+                break
+
+        final_count = len(await page.locator(listings_selector).all())
+        logger.info(f"[google_maps] Scrolling complete: {final_count} listings visible")
+
+    async def _extract_with_retry(
+        self, page: Page, listing: Locator, seen_names: Set[str]
+    ) -> Optional[DiscoveryRecord]:
+        """Try to extract a listing, retry once on failure."""
+        rec = await self._extract_listing(page, listing, seen_names)
+        if rec is not None:
+            return rec
+
+        # Retry once after a short delay
+        await short_delay(400, 800)
+        return await self._extract_listing(page, listing, seen_names)
+
+    async def _extract_listing(
+        self, page: Page, listing: Locator, seen_names: Set[str]
+    ) -> Optional[DiscoveryRecord]:
         try:
             name = await listing.get_attribute("aria-label", timeout=1000)
             if not name:
                 return None
 
+            # In-session dedup by name
+            name_key = name.strip().lower()
+            if name_key in seen_names:
+                return None
+            seen_names.add(name_key)
+
+            # Click listing to open side panel
             try:
                 await listing.scroll_into_view_if_needed(timeout=1000)
-                await listing.click(timeout=1000)
-                # Wait for the side panel to load
-                await page.wait_for_timeout(1000)
+                await listing.click(timeout=LISTING_CLICK_TIMEOUT)
+                await page.wait_for_timeout(PANEL_LOAD_WAIT)
             except Exception:
-                # If clicking fails (or element is detached due to virtual scrolling), skip
                 return None
 
-            rec = DiscoveryRecord(business_name=name, source=self.name)
+            rec = DiscoveryRecord(business_name=name.strip(), source=self.name)
 
+            # Rating
             rating_el = await page.query_selector('span[aria-label*="stars"]')
             if rating_el:
                 label = await rating_el.get_attribute("aria-label")
                 rec.rating = label.split()[0] if label else None
 
+            # Address
             addr_btn = await page.query_selector(
                 'button[data-item-id="address"], button[aria-label^="Address:"]'
             )
@@ -137,6 +220,7 @@ class GoogleMapsSource(BaseDiscoverySource):
                     label.replace("Address: ", "").strip() if label else None
                 )
 
+            # Phone
             phone_btn = await page.query_selector(
                 'button[data-item-id^="phone:tel:"], button[aria-label^="Phone:"]'
             )
@@ -146,11 +230,25 @@ class GoogleMapsSource(BaseDiscoverySource):
                     label.replace("Phone: ", "").strip() if label else None
                 )
 
+            # Website — with Google redirect cleanup
             web_btn = await page.query_selector(
                 'a[data-item-id="authority"], a[aria-label^="Website:"]'
             )
             if web_btn:
-                rec.website = await web_btn.get_attribute("href")
+                raw_url = await web_btn.get_attribute("href")
+                rec.website = self._clean_url(raw_url)
+
+            # Category extraction
+            category_el = await page.query_selector(
+                'button[data-item-id="category"], '
+                'button[jsaction*="category"] span, '
+                'span.DkEaL, '
+                'div.LrzXr'
+            )
+            if category_el:
+                cat_text = await category_el.inner_text()
+                if cat_text:
+                    rec.category = cat_text.strip()
 
             rec.quality_score = self._quality(rec)
             return rec
@@ -160,14 +258,41 @@ class GoogleMapsSource(BaseDiscoverySource):
             return None
 
     @staticmethod
+    def _clean_url(url: Optional[str]) -> Optional[str]:
+        """Strip Google redirect wrappers from URLs."""
+        if not url:
+            return None
+        # Handle /url?q=https://real-site.com&... redirects
+        if "/url?" in url and "q=" in url:
+            try:
+                parsed = urllib.parse.urlparse(url)
+                params = urllib.parse.parse_qs(parsed.query)
+                if "q" in params:
+                    return params["q"][0]
+            except Exception:
+                pass
+        # Strip UTM and tracking params for cleaner storage
+        try:
+            parsed = urllib.parse.urlparse(url)
+            # Keep only scheme, netloc, and path
+            clean = urllib.parse.urlunparse((
+                parsed.scheme, parsed.netloc, parsed.path, "", "", ""
+            ))
+            return clean.rstrip("/") if clean else url
+        except Exception:
+            return url
+
+    @staticmethod
     def _quality(rec: DiscoveryRecord) -> int:
-        score = 0
+        score = 20  # Base source bonus (Google Maps is highly reliable)
         if rec.website:
             score += 40
         if rec.phone:
-            score += 30
+            score += 25
         if rec.address:
-            score += 15
+            score += 10
         if rec.rating:
             score += 5
-        return score + 20  # Base source bonus
+        if rec.category:
+            score += 5
+        return min(score, 100)

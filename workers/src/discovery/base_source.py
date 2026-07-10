@@ -42,6 +42,8 @@ class DiscoveryRecord:
     category: Optional[str] = None
     gstin: Optional[str] = None
     cin: Optional[str] = None
+    directors: Optional[List[str]] = None
+    registered_office: Optional[str] = None
 
     # Platform-specific (social sources)
     platform: Optional[str] = None  # "facebook" | "instagram" | "linkedin"
@@ -68,6 +70,29 @@ class DiscoveryRecord:
             "quality_score": self.quality_score,
             **self.raw_data,
         }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Full dictionary representation including new fields."""
+        d = {
+            "business_name": self.business_name,
+            "source": self.source,
+            "phone": self.phone,
+            "email": self.email,
+            "website": self.website,
+            "address": self.address,
+            "rating": self.rating,
+            "category": self.category,
+            "gstin": self.gstin,
+            "cin": self.cin,
+            "directors": self.directors,
+            "registered_office": self.registered_office,
+            "platform": self.platform,
+            "profile_url": self.profile_url,
+            "quality_score": self.quality_score,
+            "raw_data": self.raw_data,
+        }
+        return {k: v for k, v in d.items() if v is not None}
+
 
 
 class BaseDiscoverySource(ABC):

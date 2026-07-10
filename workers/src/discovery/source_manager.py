@@ -48,6 +48,17 @@ def _normalize_domain(url: Optional[str]) -> Optional[str]:
         return None
 
 
+def _normalize_name(name: str) -> str:
+    """Normalize business name for fuzzy matching."""
+    if not name:
+        return ""
+    import re
+    # Remove common suffixes and punctuation
+    clean = re.sub(r"(?i)\b(pvt|ltd|llc|inc|private|limited|clinic|hospital)\b", "", name)
+    clean = re.sub(r"[^\w\s]", "", clean).lower().strip()
+    return " ".join(clean.split())
+
+
 class DiscoverySourceManager:
     """
     Central orchestrator for all discovery source plugins.
@@ -247,7 +258,7 @@ class DiscoverySourceManager:
         elif all_errors:
             status = "partial"
 
-        return {
+        result = {
             "status": status,
             "results": [r.to_legacy_dict() for r in unique_results],
             "errors": all_errors,
@@ -257,6 +268,9 @@ class DiscoverySourceManager:
             "source_reliability": self.reliability.get_all_stats(),
             "discovery_confidence": discovery_confidence.to_dict(),
         }
+
+        self.reliability.print_summary_table()
+        return result
 
     async def _run_tier(
         self,
@@ -305,33 +319,59 @@ class DiscoverySourceManager:
         records: List[DiscoveryRecord],
     ) -> tuple:
         """
-        Simple cross-source dedup by phone and domain.
+        Cross-source dedup by phone, domain, and normalized name.
+        Enriches the kept record with data from the duplicate.
         Returns (unique_records, dupe_count).
         """
-        seen_phones: set = set()
-        seen_domains: set = set()
+        seen_phones: Dict[str, DiscoveryRecord] = {}
+        seen_domains: Dict[str, DiscoveryRecord] = {}
+        seen_names: Dict[str, DiscoveryRecord] = {}
         unique: List[DiscoveryRecord] = []
         dupes = 0
 
         for r in records:
             phone = _normalize_phone(r.phone)
             domain = _normalize_domain(r.website)
+            name = _normalize_name(r.business_name)
+
+            is_dupe = False
+            kept_record = None
 
             if phone and phone in seen_phones:
+                is_dupe = True
+                kept_record = seen_phones[phone]
+            elif domain and domain in seen_domains:
+                is_dupe = True
+                kept_record = seen_domains[domain]
+            elif name and name in seen_names:
+                is_dupe = True
+                kept_record = seen_names[name]
+
+            if is_dupe and kept_record:
                 dupes += 1
-                continue
-            if domain and domain in seen_domains:
-                dupes += 1
+                # Cross-source enrichment
+                if not kept_record.phone and r.phone:
+                    kept_record.phone = r.phone
+                if not kept_record.website and r.website:
+                    kept_record.website = r.website
+                if not kept_record.address and r.address:
+                    kept_record.address = r.address
+                if not kept_record.email and r.email:
+                    kept_record.email = r.email
+                # Boost quality score slightly for multi-source confirmation
+                kept_record.quality_score = min(100, kept_record.quality_score + 5)
                 continue
 
             unique.append(r)
             if phone:
-                seen_phones.add(phone)
+                seen_phones[phone] = r
             if domain:
-                seen_domains.add(domain)
+                seen_domains[domain] = r
+            if name:
+                seen_names[name] = r
 
         logger.info(
             f"[SourceManager] Dedup: {len(records)} → {len(unique)} "
-            f"({dupes} duplicates removed)"
+            f"({dupes} duplicates removed and merged)"
         )
         return unique, dupes

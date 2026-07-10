@@ -82,6 +82,24 @@ class SourceStats:
             return 0.0
         return self.total_runtime_sec / self.total_runs
 
+    @property
+    def avg_results_per_run(self) -> float:
+        if self.successful_runs == 0:
+            return 0.0
+        return self.total_results / self.successful_runs
+
+    @property
+    def website_rate(self) -> float:
+        if self.total_results == 0:
+            return 0.0
+        return self.total_websites / self.total_results
+
+    @property
+    def phone_rate(self) -> float:
+        if self.total_results == 0:
+            return 0.0
+        return self.total_contacts / self.total_results
+
 
 def _compute_score(stats: SourceStats) -> float:
     """
@@ -176,9 +194,42 @@ class SourceReliabilityEngine:
                 "avg_contacts_per_run": stats.avg_contacts_per_run,
                 "avg_websites_per_run": stats.avg_websites_per_run,
                 "avg_runtime_sec": stats.avg_runtime_sec,
+                "avg_results_per_run": stats.avg_results_per_run,
+                "website_rate": stats.website_rate,
+                "phone_rate": stats.phone_rate,
             }
             for name, stats in self._local_stats.items()
         }
+
+    def print_summary_table(self) -> None:
+        """Log a formatted text table of current reliability metrics."""
+        if not self._local_stats:
+            logger.info("[ReliabilityEngine] No stats recorded yet.")
+            return
+
+        lines = [
+            "\n=== Source Reliability Summary ===",
+            f"{'Source':<18} | {'Score':<5} | {'Runs':<4} | {'Succ%':<5} | {'Blk%':<4} | {'AvgRes':<6} | {'Web%':<4} | {'Phn%':<4} | {'AvgSec':<6}",
+            "-" * 85
+        ]
+        
+        # Sort by score descending
+        sorted_stats = sorted(self._local_stats.values(), key=lambda s: s.reliability_score, reverse=True)
+        
+        for s in sorted_stats:
+            lines.append(
+                f"{s.source_name:<18} | "
+                f"{s.reliability_score:>4.0f}  | "
+                f"{s.total_runs:>4} | "
+                f"{s.success_rate*100:>4.0f}% | "
+                f"{s.blocked_rate*100:>3.0f}% | "
+                f"{s.avg_results_per_run:>6.1f} | "
+                f"{s.website_rate*100:>3.0f}% | "
+                f"{s.phone_rate*100:>3.0f}% | "
+                f"{s.avg_runtime_sec:>5.1f}s"
+            )
+            
+        logger.info("\n".join(lines) + "\n")
 
     def _persist(self, source: str, stats: SourceStats, now_iso: str) -> None:
         """

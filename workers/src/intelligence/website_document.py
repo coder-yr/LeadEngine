@@ -14,6 +14,23 @@ from discovery.provenance import ProvenanceDict, ProvenanceField
 
 
 @dataclass
+class WebsitePage:
+    url: str
+    title: str = ""
+    page_type: str = "unknown"
+    text: str = ""
+    links: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    schema_jsonld: List[Dict[str, Any]] = field(default_factory=list)
+    headings: List[str] = field(default_factory=list)
+    forms: List[Dict[str, Any]] = field(default_factory=list)
+    phones: List[str] = field(default_factory=list)
+    emails: List[str] = field(default_factory=list)
+    images: List[str] = field(default_factory=list)
+
+
+
+@dataclass
 class WebsiteDocument:
     """
     Fully parsed and enriched representation of a company website.
@@ -26,6 +43,7 @@ class WebsiteDocument:
     fetch_status: int = 0       # HTTP status code (0 = not fetched)
     pages_crawled: int = 0
     cached: bool = False        # Was this loaded from cache?
+    pages: List[WebsitePage] = field(default_factory=list)
 
     # --- Meta section ---
     title: Optional[ProvenanceField] = None         # <title>
@@ -123,6 +141,7 @@ class WebsiteDocument:
             "business_type": pf_val(self.business_type),
             "raw_text": self.raw_text[:5000],
             "crawl_metrics": self.crawl_metrics,
+            "pages": [p.__dict__ for p in self.pages],
         }
 
     def to_provenance_dict(self) -> Dict[str, Any]:

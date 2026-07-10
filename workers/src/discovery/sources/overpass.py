@@ -3,20 +3,17 @@ overpass.py — Tier 1 OpenStreetMap Overpass API source.
 
 Queries the public Overpass API for businesses matching a keyword + city.
 Uses Nominatim to geocode the city into a bounding box first.
-No rate limit issues for queries under 5/minute.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import time
-import urllib.parse
 from typing import Dict, List, Optional, Tuple
 
 import requests
 
 from discovery.base_source import BaseDiscoverySource, DiscoveryRecord
-from discovery.anti_block import random_user_agent
 
 logger = logging.getLogger(__name__)
 
@@ -24,28 +21,37 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 OVERPASS_URL_FALLBACK = "https://lz4.overpass-api.de/api/interpreter"
 
-# OSM amenity tags to query for common business types
-AMENITY_MAP = {
-    "dentist": ["dentist"],
-    "doctor": ["doctors", "clinic"],
-    "hospital": ["hospital"],
-    "pharmacy": ["pharmacy"],
-    "restaurant": ["restaurant", "cafe", "fast_food"],
-    "hotel": ["hotel", "guest_house"],
-    "school": ["school", "college", "university"],
-    "gym": ["gym", "sports_centre"],
-    "bank": ["bank", "atm"],
-    "lawyer": ["law_office"],
-    "default": ["office", "shop", "amenity"],
+# OSM tags to query for common business types
+OSM_TAGS = {
+    "dentist": {"amenity": ["dentist"], "healthcare": ["dentist"]},
+    "doctor": {"amenity": ["doctors", "clinic"], "healthcare": ["doctor", "clinic"]},
+    "hospital": {"amenity": ["hospital"], "healthcare": ["hospital"]},
+    "pharmacy": {"amenity": ["pharmacy"], "healthcare": ["pharmacy"]},
+    "restaurant": {"amenity": ["restaurant", "cafe", "fast_food", "food_court"]},
+    "cafe": {"amenity": ["cafe", "coffee_shop"]},
+    "hotel": {"amenity": ["hotel", "guest_house"], "tourism": ["hotel", "guest_house", "motel"]},
+    "school": {"amenity": ["school", "college", "university", "kindergarten"]},
+    "gym": {"amenity": ["gym", "sports_centre"], "leisure": ["fitness_centre", "sports_centre"]},
+    "bank": {"amenity": ["bank", "atm"]},
+    "lawyer": {"amenity": ["law_office"], "office": ["lawyer"]},
+    "architect": {"office": ["architect", "architects"]},
+    "psychologist": {"healthcare": ["psychotherapist", "counselling"]},
+    "salon": {"shop": ["hairdresser", "beauty", "massage"]},
+    "mechanic": {"shop": ["car_repair", "motorcycle_repair"], "craft": ["car_mechanic"]},
+    "plumber": {"craft": ["plumber"]},
+    "electrician": {"craft": ["electrician"]},
+    "bakery": {"shop": ["bakery", "pastry"]},
+    "supermarket": {"shop": ["supermarket", "convenience"]},
+    "default": {"office": ["company"], "shop": ["yes"], "amenity": ["yes"]},
 }
 
 
-def _get_amenity_tags(keyword: str) -> List[str]:
+def _get_osm_tags(keyword: str) -> Dict[str, List[str]]:
     kw = keyword.lower().strip()
-    for key, tags in AMENITY_MAP.items():
+    for key, tags in OSM_TAGS.items():
         if key in kw:
             return tags
-    return ["office", "shop"]
+    return OSM_TAGS["default"]
 
 
 def _geocode_city(city: str) -> Optional[Tuple[float, float, float, float]]:
@@ -73,16 +79,30 @@ def _geocode_city(city: str) -> Optional[Tuple[float, float, float, float]]:
     return None
 
 
-def _build_query(bbox: Tuple[float, float, float, float], tags: List[str]) -> str:
+def _build_query(bbox: Tuple[float, float, float, float], tags: Dict[str, List[str]], keyword: str) -> str:
     """Build an Overpass QL query."""
     south, west, north, east = bbox
     box = f"{south},{west},{north},{east}"
 
-    tag_filters = "\n".join(
-        f'  node[amenity="{tag}"]({box});'
-        f'\n  way[amenity="{tag}"]({box});'
-        for tag in tags
-    )
+    # Build tag filters
+    filters = []
+    for key, values in tags.items():
+        for val in values:
+            if val == "yes":
+                filters.append(f'  node["{key}"]({box});')
+                filters.append(f'  way["{key}"]({box});')
+            else:
+                filters.append(f'  node["{key}"="{val}"]({box});')
+                filters.append(f'  way["{key}"="{val}"]({box});')
+                
+    # Also search by name if we have a specific keyword
+    if len(keyword) > 3:
+        # Escape quotes
+        kw_safe = keyword.replace('"', '\\"').lower()
+        filters.append(f'  node["name"~"{kw_safe}",i]({box});')
+        filters.append(f'  way["name"~"{kw_safe}",i]({box});')
+
+    tag_filters = "\n".join(set(filters))
 
     return f"""
 [out:json][timeout:25];
@@ -124,7 +144,6 @@ def _parse_element(el: Dict) -> Optional[DiscoveryRecord]:
         raw_data={
             "osm_id": el.get("id"),
             "osm_type": el.get("type"),
-            "amenity": tags.get("amenity"),
             "opening_hours": tags.get("opening_hours"),
         },
     )
@@ -143,19 +162,20 @@ class OverpassSource(BaseDiscoverySource):
     tier = 1
     reliability_stars = 5
 
-    async def search(self, keyword: str, city: str, max_results: int) -> List[DiscoveryRecord]:
-        # Rate limit: be polite to public Overpass instances
-        time.sleep(1)
+    async def search(self, keyword: str, city: str, max_results: int, **kwargs) -> List[DiscoveryRecord]:
+        # Rate limit: be polite to public Overpass instances (ASYNC sleep, not blocking!)
+        await asyncio.sleep(1)
 
         bbox = _geocode_city(city)
         if not bbox:
             logger.warning(f"[overpass] Could not geocode '{city}'")
             return []
 
-        tags = _get_amenity_tags(keyword)
-        query = _build_query(bbox, tags)
+        tags = _get_osm_tags(keyword)
+        query = _build_query(bbox, tags, keyword)
 
         extracted: List[DiscoveryRecord] = []
+        seen_names: set = set()
 
         for endpoint in [OVERPASS_URL, OVERPASS_URL_FALLBACK]:
             try:
@@ -169,10 +189,16 @@ class OverpassSource(BaseDiscoverySource):
                 resp.raise_for_status()
                 data = resp.json()
 
-                for el in data.get("elements", [])[:max_results]:
+                for el in data.get("elements", []):
+                    if len(extracted) >= max_results:
+                        break
+                        
                     rec = _parse_element(el)
                     if rec:
-                        extracted.append(rec)
+                        name_key = rec.business_name.lower()
+                        if name_key not in seen_names:
+                            seen_names.add(name_key)
+                            extracted.append(rec)
 
                 logger.info(f"[overpass] {len(extracted)} results from {endpoint}")
                 break

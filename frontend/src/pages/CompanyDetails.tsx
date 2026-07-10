@@ -19,6 +19,14 @@ import { ContactsTab } from "@/components/leads/tabs/ContactsTab"
 import { CampaignsTab } from "@/components/leads/tabs/CampaignsTab"
 import { ProposalsTab } from "@/components/leads/tabs/ProposalsTab"
 import { AIAgentTab } from "@/components/leads/tabs/AIAgentTab"
+import { 
+  WebsiteTab, 
+  LeadershipTab, 
+  TechnologyTab, 
+  BusinessTab, 
+  SocialTab, 
+  SignalsTab 
+} from "@/components/leads/tabs/KnowledgeEngineTabs"
 
 export default function CompanyDetails() {
   const { id } = useParams();
@@ -204,23 +212,33 @@ export default function CompanyDetails() {
             <Tabs defaultValue="overview" className="w-full">
               <TabsList className="mb-6 bg-transparent border-b border-border w-full justify-start rounded-none p-0 h-auto overflow-x-auto">
                 <TabsTrigger value="overview" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Overview</TabsTrigger>
-                <TabsTrigger value="insights" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">AI Insights</TabsTrigger>
-                <TabsTrigger value="services" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Services Needed</TabsTrigger>
+                <TabsTrigger value="website" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Website</TabsTrigger>
                 <TabsTrigger value="contacts" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Contacts</TabsTrigger>
-                <TabsTrigger value="activities" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Activities</TabsTrigger>
-                <TabsTrigger value="campaigns" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Campaigns</TabsTrigger>
-                <TabsTrigger value="proposals" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Proposals</TabsTrigger>
+                <TabsTrigger value="leadership" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Leadership</TabsTrigger>
+                <TabsTrigger value="technology" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Technology</TabsTrigger>
+                <TabsTrigger value="business" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Business</TabsTrigger>
+                <TabsTrigger value="social" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Social</TabsTrigger>
+                <TabsTrigger value="signals" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Signals</TabsTrigger>
+                <TabsTrigger value="audit" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Audit</TabsTrigger>
+                <TabsTrigger value="insights" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">AI Insights</TabsTrigger>
+                <TabsTrigger value="proposals" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Proposal</TabsTrigger>
+                <TabsTrigger value="timeline" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Timeline</TabsTrigger>
                 <TabsTrigger value="agent" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium text-purple-500">AI Agent</TabsTrigger>
               </TabsList>
               
               <div className="mt-4">
                 <TabsContent value="overview" className="m-0 border-0 p-0"><LeadOverviewTab lead={formattedLead as any} /></TabsContent>
-                <TabsContent value="insights" className="m-0 border-0 p-0"><AIInsightsTab intelligence={formattedLead.intelligence} /></TabsContent>
-                <TabsContent value="services" className="m-0 border-0 p-0"><ServicesNeededTab company={company} /></TabsContent>
+                <TabsContent value="website" className="m-0 border-0 p-0"><WebsiteTab company={company} /></TabsContent>
                 <TabsContent value="contacts" className="m-0 border-0 p-0"><ContactsTab company={company} /></TabsContent>
-                <TabsContent value="activities" className="m-0 border-0 p-0"><ActivityTimelineTab activities={formattedLead.activities} /></TabsContent>
-                <TabsContent value="campaigns" className="m-0 border-0 p-0"><CampaignsTab company={company} /></TabsContent>
+                <TabsContent value="leadership" className="m-0 border-0 p-0"><LeadershipTab company={company} /></TabsContent>
+                <TabsContent value="technology" className="m-0 border-0 p-0"><TechnologyTab company={company} /></TabsContent>
+                <TabsContent value="business" className="m-0 border-0 p-0"><BusinessTab company={company} /></TabsContent>
+                <TabsContent value="social" className="m-0 border-0 p-0"><SocialTab company={company} /></TabsContent>
+                <TabsContent value="signals" className="m-0 border-0 p-0"><SignalsTab company={company} /></TabsContent>
+                <TabsContent value="audit" className="m-0 border-0 p-0"><WebsiteAuditTab auditData={formattedLead.audit as any} /></TabsContent>
+                <TabsContent value="insights" className="m-0 border-0 p-0"><AIInsightsTab intelligence={formattedLead.intelligence} /></TabsContent>
                 <TabsContent value="proposals" className="m-0 border-0 p-0"><ProposalsTab companyId={company.id} /></TabsContent>
+                <TabsContent value="timeline" className="m-0 border-0 p-0"><ActivityTimelineTab activities={formattedLead.activities} /></TabsContent>
                 <TabsContent value="agent" className="m-0 border-0 p-0"><AIAgentTab companyId={company.id} /></TabsContent>
               </div>
             </Tabs>

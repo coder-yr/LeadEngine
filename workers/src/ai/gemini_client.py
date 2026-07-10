@@ -32,11 +32,14 @@ class GeminiClient:
         
         # Initialize GenAI Client
         # The client will automatically pick up GEMINI_API_KEY from environment
-        try:
-            self.client = genai.Client()
-        except Exception as e:
-            logger.error(f"Failed to initialize Gemini Client: {e}")
+        if not self.api_key:
             self.client = None
+        else:
+            try:
+                self.client = genai.Client()
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini Client: {e}")
+                self.client = None
 
     async def generate_json_with_search(
         self, 
