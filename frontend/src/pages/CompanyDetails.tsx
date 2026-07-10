@@ -46,13 +46,9 @@ export default function CompanyDetails() {
           website_audits: dbCompany.website_audits,
           intelligence: {
             leadScore: dbCompany.company_intelligence?.[0]?.lead_score || 0,
-            websiteScore: dbCompany.website_audits?.[0]?.seo_score || 0,
-            socialPresence: (dbCompany.website_audits?.[0]?.social_links_found?.length || 0) > 0,
-            whatsappPresence: dbCompany.website_audits?.[0]?.has_whatsapp_widget || false,
-            crmPresence: false,
-            bookingPresence: dbCompany.website_audits?.[0]?.has_contact_form || false,
-            aiInsight: "Strategic AI Insights generated successfully.",
-            recommendedServices: dbCompany.company_intelligence?.[0]?.services_needed || []
+            aiInsight: dbCompany.company_ai_insights?.[0]?.summary || dbCompany.company_ai_insights?.[0]?.reasoning || "AI Insights pending.",
+            recommendedServices: dbCompany.company_ai_insights?.[0]?.services_needed || dbCompany.company_intelligence?.[0]?.services_needed || [],
+            opportunityScore: dbCompany.company_ai_insights?.[0]?.opportunity_score || 0
           }
         };
 
@@ -180,15 +176,6 @@ export default function CompanyDetails() {
                     <div className="h-full bg-primary" style={{ width: `${company.intelligence.leadScore}%` }} />
                   </div>
                 </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span className="text-muted-foreground">Website Score</span>
-                    <span className="font-bold text-primary">{company.intelligence.websiteScore}</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary" style={{ width: `${company.intelligence.websiteScore}%` }} />
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -217,7 +204,6 @@ export default function CompanyDetails() {
             <Tabs defaultValue="overview" className="w-full">
               <TabsList className="mb-6 bg-transparent border-b border-border w-full justify-start rounded-none p-0 h-auto overflow-x-auto">
                 <TabsTrigger value="overview" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Overview</TabsTrigger>
-                <TabsTrigger value="audit" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Website Audit</TabsTrigger>
                 <TabsTrigger value="insights" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">AI Insights</TabsTrigger>
                 <TabsTrigger value="services" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Services Needed</TabsTrigger>
                 <TabsTrigger value="contacts" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Contacts</TabsTrigger>
@@ -229,9 +215,6 @@ export default function CompanyDetails() {
               
               <div className="mt-4">
                 <TabsContent value="overview" className="m-0 border-0 p-0"><LeadOverviewTab lead={formattedLead as any} /></TabsContent>
-                <TabsContent value="audit" className="m-0 border-0 p-0">
-                  <WebsiteAuditTab audit={company.website_audits && company.website_audits.length > 0 ? formattedLead.audit : undefined} />
-                </TabsContent>
                 <TabsContent value="insights" className="m-0 border-0 p-0"><AIInsightsTab intelligence={formattedLead.intelligence} /></TabsContent>
                 <TabsContent value="services" className="m-0 border-0 p-0"><ServicesNeededTab company={company} /></TabsContent>
                 <TabsContent value="contacts" className="m-0 border-0 p-0"><ContactsTab company={company} /></TabsContent>

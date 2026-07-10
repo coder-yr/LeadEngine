@@ -14,7 +14,24 @@ const sharedQueueOptions: Omit<QueueOptions, 'connection'> = {
 };
 
 // Main Queues
+export const discoveryQueue = new Queue('discovery-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
 export const intelligenceQueue = new Queue('intelligence-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+// V2: Identity Resolution
+export const identityResolutionQueue = new Queue('identity-resolution-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+// V2: Website Intelligence (6-stage crawl pipeline)
+export const websiteIntelligenceQueue = new Queue('website-intelligence-queue', {
   connection: redisConfig,
   ...sharedQueueOptions,
 });
@@ -49,7 +66,32 @@ export const outreachQueue = new Queue('outreach-engine-queue', {
   ...sharedQueueOptions,
 });
 
+// V3 Pipeline Extensions
+export const cacheCheckQueue = new Queue('cache-check-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const confidenceEvaluationQueue = new Queue('confidence-evaluation-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const adaptiveEnrichmentQueue = new Queue('adaptive-enrichment-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const proposalGenerationQueue = new Queue('proposal-generation-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
 // Dead Letter Queues (DLQs)
+export const failedDiscoveryQueue = new Queue('failed-discovery', {
+  connection: redisConfig,
+});
+
 export const failedIntelligenceQueue = new Queue('failed-intelligence', {
   connection: redisConfig,
 });

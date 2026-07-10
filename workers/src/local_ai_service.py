@@ -154,7 +154,11 @@ async def infer(request: InferRequest):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "models_loaded": len(registry),
+        "registry": {k: {"name": v["name"], "loaded": v["loaded"], "device": v["device"]} for k, v in registry.items()}
+    }
 
 @app.get("/models")
 async def get_models():

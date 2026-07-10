@@ -122,7 +122,8 @@ export class CompanyRepository {
         audit_jobs (
           status,
           updated_at
-        )
+        ),
+        company_ai_insights (*)
       `)
       .order('created_at', { ascending: false });
 
@@ -183,10 +184,11 @@ export class CompanyRepository {
         website_audits (*),
         audit_jobs (*),
         contacts (*),
-        activities (*)
+        activities (*),
+        company_ai_insights (*)
       `)
       .eq('id', companyId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error(`Error fetching company ${companyId}:`, error);
@@ -254,5 +256,59 @@ export class CompanyRepository {
       activitiesDeleted: activitiesCount || 0,
       tasksDeleted: tasksCount || 0
     };
+  }
+  /**
+   * Field Provenance Integration
+   * Store extracted values alongside their source and confidence instead of just overwriting.
+   * Then update the lead_identities/companies table if this is the highest confidence.
+   */
+  async updateFieldWithProvenance(params: {
+    leadIdentityId: string;
+    fieldName: string;
+    value: string;
+    source: string;
+    confidence: number;
+    companyId?: string;
+  }) {
+    // 1. Insert into field_provenance
+    const { error: insertError } = await supabase.from('field_provenance').insert({
+      lead_identity_id: params.leadIdentityId,
+      field_name: params.fieldName,
+      value: params.value,
+      source: params.source,
+      confidence: params.confidence,
+    });
+
+    if (insertError) {
+      console.error('Error inserting field provenance:', insertError);
+      throw insertError;
+    }
+
+    // 2. Fetch all values for this field
+    const { data: allVals } = await supabase
+      .from('field_provenance')
+      .select('value, confidence')
+      .eq('lead_identity_id', params.leadIdentityId)
+      .eq('field_name', params.fieldName)
+      .order('confidence', { ascending: false });
+
+    // 3. Update the canonical table if we have a highest confidence value
+    if (allVals && allVals.length > 0) {
+      const bestVal = allVals[0].value;
+      const canonicalFieldMap: Record<string, { table: string, col: string }> = {
+        'phone': { table: 'lead_identities', col: 'normalized_phone' },
+        'email': { table: 'companies', col: 'email' }, // companies table legacy for now
+        'website': { table: 'lead_identities', col: 'normalized_domain' },
+      };
+
+      const mapping = canonicalFieldMap[params.fieldName];
+      if (mapping) {
+        if (mapping.table === 'lead_identities') {
+          await supabase.from('lead_identities').update({ [mapping.col]: bestVal }).eq('id', params.leadIdentityId);
+        } else if (mapping.table === 'companies' && params.companyId) {
+          await supabase.from('companies').update({ [mapping.col]: bestVal }).eq('id', params.companyId);
+        }
+      }
+    }
   }
 }

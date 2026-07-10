@@ -30,7 +30,7 @@ interface DiscoverySearchFormProps {
 export function DiscoverySearchForm({ onJobStarted }: DiscoverySearchFormProps) {
   const [keyword, setKeyword] = useState("");
   const [city, setCity] = useState("");
-  const [maxResults, setMaxResults] = useState([50]);
+  const [maxResults, setMaxResults] = useState([200]);
   const [sources, setSources] = useState<string[]>(ALL_SOURCES.map((s) => s.id));
   const [isLoading, setIsLoading] = useState(false);
 

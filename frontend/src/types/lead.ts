@@ -45,6 +45,7 @@ export interface IntelligenceData {
   digitalMaturityScore: number;
   servicesNeeded: ServiceRecommendation[];
   leadScore: number;
+  opportunityScore?: number;
   aiInsights: string;
 }
 

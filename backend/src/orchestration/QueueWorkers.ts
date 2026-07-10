@@ -9,13 +9,16 @@ import {
   buyingSignalsQueue,
   contactDiscoveryQueue,
   leadScoringQueue,
+  discoveryQueue,
+  failedDiscoveryQueue,
   failedIntelligenceQueue, 
   failedAuditQueue, 
   failedInsightsQueue,
   failedBuyingSignalsQueue,
   failedContactDiscoveryQueue,
   failedLeadScoringQueue,
-  outreachQueue
+  outreachQueue,
+  adaptiveEnrichmentQueue
 } from './Queues.js';
 
 import { IntelligenceService } from '../workers/intelligence/IntelligenceService.js';
@@ -25,13 +28,15 @@ import { AiInsightsService } from '../workers/ai-insights/AiInsightsService.js';
 import { AiInsightsRepository } from '../workers/ai-insights/AiInsightsRepository.js';
 import { BuyingSignalsService } from '../workers/buying-signals/BuyingSignalsService.js';
 import { outreachWorker } from '../workers/outreach/OutreachEngineWorker.js';
+import { identityResolutionWorker } from '../workers/intelligence/IdentityResolutionWorker.js';
+import { websiteIntelligenceWorker } from '../workers/intelligence/WebsiteIntelligenceWorker.js';
 import { ContactDiscoveryService } from '../services/ContactDiscoveryService.js';
 import { LeadScoringService } from '../services/LeadScoringService.js';
 
 
 // We import outreachWorker here to ensure it initializes and starts processing.
 // Export it if needed
-export { outreachWorker };
+export { outreachWorker, identityResolutionWorker, websiteIntelligenceWorker };
 
 // Worker Options
 const workerOptions = {
@@ -42,23 +47,105 @@ const workerOptions = {
   },
 };
 
-// 1. Intelligence Worker
-export const intelligenceWorker = new Worker(
-  'intelligence-queue',
-  async (job: Job<{ companyId: string; traceId: string }>) => {
-    const { companyId, traceId } = job.data;
+import { spawn } from 'child_process';
+import path from 'path';
+import { StageDispatcher } from './StageDispatcher.js';
+import { DiscoveryStage } from '../services/IdentityResolutionService.js';
+
+// 0. Discovery Worker (V2 Discovery entry point)
+export const discoveryWorker = new Worker(
+  'discovery-queue',
+  async (job: Job<{ keyword: string; city: string; sources?: string[]; max_results?: number; traceId: string }>) => {
+    const { keyword, city, sources, max_results, traceId } = job.data;
     const { logger } = createTraceLogger(traceId);
     
-    logger.info({ companyId }, 'Starting intelligence analysis');
+    logger.info({ keyword, city }, 'Starting V2 discovery engine');
     
-    const intelligenceService = new IntelligenceService();
-    const result = await intelligenceService.analyzeCompany(companyId);
+    if (!keyword || !city) {
+      throw new Error("Both 'keyword' and 'city' are required");
+    }
+
+    // Call Python discovery_runner.py
+    const pythonPath = process.env.PYTHON_PATH || path.resolve(process.cwd(), '../workers/venv/Scripts/python.exe');
+    const scriptPath = path.resolve(process.cwd(), '../workers/src/discovery_runner.py');
+
+    const discoveryOutput = await new Promise<any>((resolve, reject) => {
+      const py = spawn(pythonPath, [scriptPath]);
+      let output = '';
+      let errorOut = '';
+
+      py.stdout.on('data', (data) => { output += data.toString(); });
+      py.stderr.on('data', (data) => { errorOut += data.toString(); });
+
+      py.on('close', (code) => {
+        if (code !== 0) {
+          logger.error({ errorOut }, 'Discovery Python script failed');
+          return reject(new Error(`Python process exited with code ${code}`));
+        }
+        try {
+          resolve(JSON.parse(output));
+        } catch (e) {
+          reject(new Error(`Failed to parse Python output: ${e}`));
+        }
+      });
+
+      py.stdin.write(JSON.stringify({ 
+        keyword, 
+        city, 
+        sources: sources || ['google_maps', 'overpass', 'duckduckgo', 'google_dorks', 'website_search'],
+        max_results: max_results || 10 
+      }));
+      py.stdin.end();
+    });
+
+    if (discoveryOutput.status === 'error') {
+      throw new Error(discoveryOutput.error);
+    }
+
+    // Pass results to identity resolution
+    const { identityResolutionQueue } = await import('./Queues.js');
+    await identityResolutionQueue.add('resolve-identity', {
+      traceId,
+      stage: 'DISCOVERED',
+      discoveryOutput,
+    });
+
+    return discoveryOutput;
+  },
+  workerOptions
+);
+
+discoveryWorker.on('failed', async (job, err) => {
+  if (job && job.attemptsMade === job.opts.attempts) {
+    const { logger } = createTraceLogger(job.data.traceId);
+    logger.error({ err, keyword: job.data.keyword }, 'Discovery job failed permanently. Moving to DLQ.');
+    await failedDiscoveryQueue.add('failed-discovery', job.data);
+  }
+});
+
+// 1. Intelligence Worker (V3 Pipeline entry point for an existing company)
+export const intelligenceWorker = new Worker(
+  'intelligence-queue',
+  async (job: Job<{ companyId: string; leadIdentityId?: string; traceId: string; stage?: DiscoveryStage }>) => {
+    const { companyId, traceId, stage, leadIdentityId } = job.data;
+    const { logger } = createTraceLogger(traceId);
     
-    // Chain to Contact Discovery
-    logger.info({ companyId }, 'Intelligence analysis completed, queuing contact discovery');
-    await contactDiscoveryQueue.add('discover-contacts', { companyId, traceId });
+    logger.info({ companyId, stage }, 'Starting intelligence pipeline for company');
     
-    return result;
+    // Validate company exists
+    const { data: company } = await supabase.from('companies').select('id, website_url').eq('id', companyId).single();
+    if (!company) {
+      throw new Error(`Company ${companyId} not found`);
+    }
+
+    // Advance to next stage (or IDENTITY_RESOLVED if starting fresh)
+    await StageDispatcher.advance(leadIdentityId || companyId, stage || 'DISCOVERED', {
+      supabase,
+      companyId,
+      traceId,
+    });
+
+    return { companyId, started: true };
   },
   workerOptions
 );
@@ -71,31 +158,245 @@ intelligenceWorker.on('failed', async (job, err) => {
   }
 });
 
-// 2. Contact Discovery Worker
+// 2. Cache Check Worker
+export const cacheCheckWorker = new Worker(
+  'cache-check-queue',
+  async (job: Job<{ leadIdentityId: string; companyId?: string; traceId?: string; stage: DiscoveryStage }>) => {
+    const { leadIdentityId, companyId, traceId, stage } = job.data;
+    const { logger } = createTraceLogger(traceId || leadIdentityId);
+    
+    logger.info({ leadIdentityId }, 'Checking cache for recent discovery');
+    
+    // Check if company was enriched in the last 30 days
+    if (companyId) {
+      const { data: company } = await supabase
+        .from('companies')
+        .select('enriched_at')
+        .eq('id', companyId)
+        .maybeSingle();
+
+      if (company?.enriched_at) {
+        const enrichedDate = new Date(company.enriched_at);
+        const daysSinceEnrichment = (Date.now() - enrichedDate.getTime()) / (1000 * 60 * 60 * 24);
+        
+        if (daysSinceEnrichment < 30) {
+          logger.info({ companyId, daysSinceEnrichment }, 'Company enriched recently, returning cached result');
+          await StageDispatcher.advance(leadIdentityId, 'COMPLETE', {
+            supabase,
+            companyId,
+            traceId,
+            metadata: { skipped: true, reason: 'cached' }
+          });
+          return { cached: true, daysSinceEnrichment };
+        }
+      }
+    }
+    
+    // Proceed to next stage
+    await StageDispatcher.advance(leadIdentityId, stage, {
+      supabase,
+      companyId,
+      traceId,
+    });
+    
+    return { cached: false };
+  },
+  workerOptions
+);
+
+// 3. Confidence Evaluation Worker
+export const confidenceEvaluationWorker = new Worker(
+  'confidence-evaluation-queue',
+  async (job: Job<{ leadIdentityId: string; companyId?: string; traceId?: string; stage: DiscoveryStage }>) => {
+    const { leadIdentityId, companyId, traceId, stage } = job.data;
+    const { logger } = createTraceLogger(traceId || leadIdentityId);
+    
+    logger.info({ leadIdentityId }, 'Evaluating confidence of extracted data');
+    
+    // Fetch the lead identity to check what was extracted
+    const { data: identity } = await supabase
+      .from('lead_identities')
+      .select('website_document, normalized_phone, normalized_domain, normalized_name')
+      .eq('id', leadIdentityId)
+      .maybeSingle();
+
+    if (!identity) {
+      throw new Error(`Lead Identity ${leadIdentityId} not found`);
+    }
+
+    const doc = identity.website_document || {};
+    
+    // Check signals
+    const hasWebsite = !!identity.normalized_domain;
+    const hasPhone = !!identity.normalized_phone || !!(doc.contacts && doc.contacts.phone_numbers && doc.contacts.phone_numbers.length > 0);
+    const hasEmail = !!(doc.contacts && doc.contacts.emails && doc.contacts.emails.length > 0);
+    const hasLeadership = !!(doc.leadership && Object.keys(doc.leadership).length > 0);
+    const hasSocial = !!(doc.social && Object.keys(doc.social).length > 0);
+
+    let confidence = 0;
+    if (hasWebsite) confidence += 40;
+    if (hasPhone) confidence += 20;
+    if (hasEmail) confidence += 20;
+    if (hasLeadership) confidence += 10;
+    if (hasSocial) confidence += 10;
+
+    const needsEnrichment = confidence < 80 || !hasPhone || !hasEmail;
+    
+    logger.info({ 
+      leadIdentityId, 
+      confidence, 
+      needsEnrichment, 
+      signals: { hasWebsite, hasPhone, hasEmail, hasLeadership, hasSocial } 
+    }, 'Confidence evaluated');
+
+    // Update DB with confidence
+    await supabase.from('lead_identities').update({
+      identity_confidence: confidence,
+    }).eq('id', leadIdentityId);
+
+    if (needsEnrichment) {
+      await adaptiveEnrichmentQueue.add('enrich-lead', {
+        leadIdentityId,
+        companyId,
+        traceId,
+        stage: 'ADAPTIVE_ENRICHMENT',
+        missing: {
+          phone: !hasPhone,
+          email: !hasEmail,
+          leadership: !hasLeadership,
+          social: !hasSocial,
+          website: !hasWebsite,
+        }
+      });
+      // Do not advance stage via dispatcher because we manually routed to enrichment
+    } else {
+      // Skip enrichment, go straight to next stage
+      await StageDispatcher.advance(leadIdentityId, 'ADAPTIVE_ENRICHMENT', { // effectively skips it and moves to AI_INTELLIGENCE
+        supabase,
+        companyId,
+        traceId,
+        metadata: { skippedEnrichment: true, confidence }
+      });
+    }
+
+    return { confidence, needsEnrichment };
+  },
+  workerOptions
+);
+
+confidenceEvaluationWorker.on('failed', async (job, err) => {
+  if (job && job.attemptsMade === job.opts.attempts) {
+    const { logger } = createTraceLogger(job.data.traceId || job.data.leadIdentityId);
+    logger.error({ err, leadIdentityId: job.data.leadIdentityId }, 'Confidence evaluation failed permanently.');
+  }
+});
+
+// 4. Adaptive Enrichment Worker
+export const adaptiveEnrichmentWorker = new Worker(
+  'adaptive-enrichment-queue',
+  async (job: Job<{ leadIdentityId: string; companyId?: string; traceId?: string; stage: DiscoveryStage; missing: any }>) => {
+    const { leadIdentityId, companyId, traceId, stage, missing } = job.data;
+    const { logger } = createTraceLogger(traceId || leadIdentityId);
+    
+    logger.info({ leadIdentityId, missing }, 'Starting adaptive enrichment');
+    
+    // Determine which sources to run based on missing data
+    const sourcesToRun: string[] = [];
+    if (missing.phone) sourcesToRun.push('justdial', 'asklaila', 'grotal', 'yellowpages', 'hotfrog');
+    if (missing.website) sourcesToRun.push('duckduckgo', 'google_dorks');
+    // For now, we will run the discovery_runner again with specific sources
+    
+    if (sourcesToRun.length > 0) {
+      const { data: company } = await supabase.from('companies').select('name, city, state_province').eq('id', companyId).maybeSingle();
+      if (company) {
+        const keyword = company.name;
+        const city = company.city || company.state_province || '';
+        
+        const pythonPath = process.env.PYTHON_PATH || path.resolve(process.cwd(), '../workers/venv/Scripts/python.exe');
+        const scriptPath = path.resolve(process.cwd(), '../workers/src/discovery_runner.py');
+
+        try {
+          const discoveryOutput = await new Promise<any>((resolve, reject) => {
+            const py = spawn(pythonPath, [scriptPath]);
+            let output = '';
+            let errorOut = '';
+            py.stdout.on('data', (data) => { output += data.toString(); });
+            py.stderr.on('data', (data) => { errorOut += data.toString(); });
+            py.on('close', (code) => {
+              if (code !== 0) return reject(new Error(`Python process exited with code ${code}`));
+              try { resolve(JSON.parse(output)); } catch (e) { reject(new Error(`Failed to parse Python output: ${e}`)); }
+            });
+            py.stdin.write(JSON.stringify({ keyword, city, sources: sourcesToRun, max_results: 5 }));
+            py.stdin.end();
+          });
+          
+          logger.info({ leadIdentityId, results: discoveryOutput.total_raw }, 'Adaptive enrichment completed');
+          
+          // Queue it back to identity resolution to merge the new records
+          const { identityResolutionQueue } = await import('./Queues.js');
+          await identityResolutionQueue.add('resolve-identity', {
+            companyId,
+            traceId,
+            stage: 'ADAPTIVE_ENRICHMENT', // Advance forward to next stage, do not rewind!
+            discoveryOutput,
+          });
+          
+          return { enrichmentQueued: true };
+          
+        } catch (err: any) {
+          logger.error({ err: err.message }, 'Adaptive enrichment failed');
+        }
+      }
+    }
+    
+    // If we didn't rewind, just advance to next stage
+    await StageDispatcher.advance(leadIdentityId, stage, {
+      supabase,
+      companyId,
+      traceId,
+    });
+    
+    return { enrichmentRan: sourcesToRun.length > 0 };
+  },
+  workerOptions
+);
+
+adaptiveEnrichmentWorker.on('failed', async (job, err) => {
+  if (job && job.attemptsMade === job.opts.attempts) {
+    const { logger } = createTraceLogger(job.data.traceId || job.data.leadIdentityId);
+    logger.error({ err, leadIdentityId: job.data.leadIdentityId }, 'Adaptive enrichment failed permanently.');
+  }
+});
+
+// 5. Contact Discovery Worker
 export const contactDiscoveryWorker = new Worker(
   'contact-discovery-queue',
-  async (job: Job<{ companyId: string; traceId: string }>) => {
-    const { companyId, traceId } = job.data;
-    const { logger } = createTraceLogger(traceId);
+  async (job: Job<{ leadIdentityId: string; companyId: string; traceId?: string; stage: DiscoveryStage }>) => {
+    const { leadIdentityId, companyId, traceId, stage } = job.data;
+    const { logger } = createTraceLogger(traceId || leadIdentityId);
     
-    logger.info({ companyId }, 'Starting contact discovery');
+    logger.info({ companyId, leadIdentityId }, 'Starting contact discovery');
     
     const contactDiscoveryService = new ContactDiscoveryService();
-    const contactsCreated = await contactDiscoveryService.discoverContacts(companyId);
+    const contactsFound = await contactDiscoveryService.discoverContacts(companyId);
     
-    // Chain to Website Audit
-    logger.info({ companyId, contactsCreated }, 'Contact discovery completed, queuing website audit');
-    await websiteAuditQueue.add('audit-website', { companyId, traceId });
+    // Advance to next stage
+    await StageDispatcher.advance(leadIdentityId, stage, {
+      supabase,
+      companyId,
+      traceId,
+      metadata: { contactsFound }
+    });
     
-    return { contactsCreated };
+    return { contactsFound };
   },
-  { ...workerOptions, concurrency: 1 } // Hard limit to 1 to prevent Playwright/Ollama overload
+  workerOptions
 );
 
 contactDiscoveryWorker.on('failed', async (job, err) => {
   if (job && job.attemptsMade === job.opts.attempts) {
-    const { logger } = createTraceLogger(job.data.traceId);
-    logger.error({ err, companyId: job.data.companyId }, 'Contact Discovery job failed permanently. Moving to DLQ.');
+    const { logger } = createTraceLogger(job.data.traceId || job.data.leadIdentityId);
+    logger.error({ err, companyId: job.data.companyId }, 'Contact discovery failed permanently. Moving to DLQ.');
     await failedContactDiscoveryQueue.add('failed-contact-discovery', job.data);
   }
 });
@@ -288,17 +589,24 @@ buyingSignalsWorker.on('failed', async (job, err) => {
 // Helper to attach lifecycle logs to all workers
 function attachLifecycleLogs(worker: Worker, stageName: string) {
   worker.on('active', (job) => {
-    console.log(`[STAGE: ${stageName}] Job Started - JobId: ${job.id}, Company: ${job.data.companyId}`);
+    const id = job.data?.companyId || job.data?.keyword || 'unknown';
+    console.log(`[STAGE: ${stageName}] Job Started - JobId: ${job.id}, Target: ${id}`);
   });
   worker.on('completed', (job) => {
-    console.log(`[STAGE: ${stageName}] Job Completed - JobId: ${job.id}, Company: ${job.data.companyId}`);
+    const id = job.data?.companyId || job.data?.keyword || 'unknown';
+    console.log(`[STAGE: ${stageName}] Job Completed - JobId: ${job.id}, Target: ${id}`);
   });
   worker.on('failed', (job, err) => {
-    console.log(`[STAGE: ${stageName}] Job Failed - JobId: ${job?.id}, Company: ${job?.data?.companyId}. Error: ${err.message}`);
+    const id = job?.data?.companyId || job?.data?.keyword || 'unknown';
+    console.log(`[STAGE: ${stageName}] Job Failed - JobId: ${job?.id}, Target: ${id}. Error: ${err.message}`);
   });
 }
 
+attachLifecycleLogs(discoveryWorker, 'Discovery');
 attachLifecycleLogs(intelligenceWorker, 'Intelligence');
+attachLifecycleLogs(cacheCheckWorker, 'Cache Check');
+attachLifecycleLogs(confidenceEvaluationWorker, 'Confidence Evaluation');
+attachLifecycleLogs(adaptiveEnrichmentWorker, 'Adaptive Enrichment');
 attachLifecycleLogs(contactDiscoveryWorker, 'Contact Discovery');
 attachLifecycleLogs(websiteAuditWorker, 'Website Audit');
 attachLifecycleLogs(aiInsightsWorker, 'AI Insights');

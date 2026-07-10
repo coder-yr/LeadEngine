@@ -71,6 +71,21 @@ export function AIInsightsTab({ intelligence }: AIInsightsTabProps) {
               </div>
             </div>
 
+            {intelligence.opportunityScore !== undefined && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Opportunity Score</span>
+                  <span className="font-bold">{intelligence.opportunityScore}/100</span>
+                </div>
+                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500" 
+                    style={{ width: `${intelligence.opportunityScore}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-1">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Sales Priority (Lead Score)</span>

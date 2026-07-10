@@ -69,7 +69,14 @@ export default function Discovery() {
   const handleBulkAnalyze = async (resultIds: string[]) => {
     try {
       await axios.post("http://localhost:3000/api/discovery/bulk-analyze", { resultIds });
-      alert(`Triggered intelligence workflows for ${resultIds.length} records.`);
+      alert(`Triggered intelligence workflows for ${resultIds.length} records. The UI will update shortly.`);
+      
+      if (selectedJob) {
+        // Poll a few times as the async backend creates companies
+        setTimeout(() => fetchJobResults(selectedJob.id), 1000);
+        setTimeout(() => fetchJobResults(selectedJob.id), 3000);
+        setTimeout(() => fetchJobResults(selectedJob.id), 6000);
+      }
     } catch (error) {
       alert("Failed to start bulk analysis.");
     }
