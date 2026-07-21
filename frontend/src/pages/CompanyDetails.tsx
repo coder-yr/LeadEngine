@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import axios from "axios"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -23,55 +23,70 @@ import {
   WebsiteTab, 
   LeadershipTab, 
   TechnologyTab, 
-  BusinessTab, 
-  SocialTab, 
-  SignalsTab 
+  BusinessTab,
+  SocialTab,
+  SignalsTab
 } from "@/components/leads/tabs/KnowledgeEngineTabs"
+import { AnalysisTab } from "@/components/leads/tabs/AnalysisTab"
 
 export default function CompanyDetails() {
   const { id } = useParams();
   const [company, setCompany] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchCompany = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get(`http://localhost:3000/api/companies/${id}`);
-        const dbCompany = res.data;
-        
-        // Map backend DB objects to frontend Company schema
-        const mappedCompany = {
-          id: dbCompany.id,
-          name: dbCompany.name,
-          website: dbCompany.website_url,
-          industry: dbCompany.industry || 'Unknown',
-          city: dbCompany.city || null,
-          state_province: dbCompany.state_province || null,
-          address: dbCompany.address || null,
-          employee_count: dbCompany.employee_count || null,
-          lastAudited: dbCompany.created_at,
-          website_audits: dbCompany.website_audits,
-          intelligence: {
-            leadScore: dbCompany.company_intelligence?.[0]?.lead_score || 0,
-            aiInsight: dbCompany.company_ai_insights?.[0]?.summary || dbCompany.company_ai_insights?.[0]?.reasoning || "AI Insights pending.",
-            recommendedServices: dbCompany.company_ai_insights?.[0]?.services_needed || dbCompany.company_intelligence?.[0]?.services_needed || [],
-            opportunityScore: dbCompany.company_ai_insights?.[0]?.opportunity_score || 0
-          }
-        };
+  const fetchCompany = useCallback(async () => {
+    if (!id) return;
+    try {
+      setLoading(true);
+      const res = await axios.get(`http://localhost:3000/api/companies/${id}`);
+      const dbCompany = res.data;
+      const aiInsights = dbCompany.company_ai_insights || {};
+      
+      // Map backend DB objects to frontend Company schema
+      const mappedCompany = {
+        id: dbCompany.id,
+        name: dbCompany.name,
+        website: dbCompany.website_url,
+        industry: dbCompany.industry || 'Unknown',
+        city: dbCompany.city || null,
+        state_province: dbCompany.state_province || null,
+        address: dbCompany.address || null,
+        employee_count: dbCompany.employee_count || null,
+        lastAudited: dbCompany.created_at,
+        website_audits: dbCompany.website_audits,
+        intelligence: {
+          leadScore: dbCompany.lead_score || 0,
+          aiInsight: aiInsights.summary || aiInsights.reasoning || "AI Insights pending.",
+          recommendedServices: aiInsights.services_needed || [],
+          opportunityScore: aiInsights.opportunity_score || dbCompany.opportunity_score || 0
+        },
+        analysis_status: dbCompany.analysis_status,
+        analysis_progress: dbCompany.analysis_progress,
+        analysis_started_at: dbCompany.analysis_started_at,
+        analysis_completed_at: dbCompany.analysis_completed_at,
+        analysis_duration_ms: dbCompany.analysis_duration_ms,
+        analysis_confidence: dbCompany.analysis_confidence,
+        analysis_error: dbCompany.analysis_error
+      };
 
-        setCompany(mappedCompany);
-      } catch (error) {
-        console.error("Failed to fetch company:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (id) fetchCompany();
+      setCompany(mappedCompany);
+    } catch (error) {
+      console.error("Failed to fetch company:", error);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    fetchCompany();
+  }, [fetchCompany]);
 
   if (loading || !company) return <div className="p-10 text-center text-muted-foreground">Loading company profile...</div>;
   
+  const rawWebsite = company.website || '';
+  const cleanWebsite = rawWebsite.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+  const validWebsiteUrl = rawWebsite.match(/^https?:\/\//i) ? rawWebsite : (rawWebsite ? `https://${rawWebsite}` : '#');
+
   // Create bridge object for legacy tabs that still expect 'Lead'
   const auditData = company.website_audits?.[0] || {};
   const formattedLead = {
@@ -79,7 +94,7 @@ export default function CompanyDetails() {
     name: company.name, // Will be overridden or ignored by most tabs now, except Overview
     title: "Primary Contact",
     company: company.name,
-    email: "contact@" + company.website,
+    email: cleanWebsite ? `contact@${cleanWebsite}` : "",
     intelligence: {
       digitalMaturityScore: company.intelligence.digitalMaturityScore || 0,
       aiInsights: company.intelligence.aiInsight,
@@ -87,7 +102,7 @@ export default function CompanyDetails() {
       leadScore: company.intelligence.leadScore
     },
     audit: {
-      url: `https://${company.website}`,
+      url: validWebsiteUrl,
       auditedAt: auditData.audited_at || company.lastAudited,
       seoScore: auditData.seo_score || 0,
       mobileFriendly: auditData.mobile_friendly ?? false,
@@ -105,27 +120,31 @@ export default function CompanyDetails() {
   return (
     <div className="h-full flex flex-col bg-background rounded-lg border border-border shadow-sm overflow-hidden animate-in fade-in duration-500">
       {/* Top Navigation Bar */}
-      <div className="flex items-center gap-4 px-6 py-4 border-b border-border bg-card">
-        <Button variant="ghost" size="icon" asChild className="shrink-0">
-          <Link to="/companies">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-        </Button>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg shadow-sm">
-            {company.name.charAt(0)}
-          </div>
-          <div>
-            <h1 className="text-xl font-bold leading-none">{company.name}</h1>
-            <a href={`https://${company.website}`} target="_blank" rel="noreferrer" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 mt-1">
-              <Globe className="w-3 h-3" />
-              {company.website}
-            </a>
+      <div className="flex flex-col md:flex-row md:items-center gap-4 px-4 md:px-6 py-4 border-b border-border bg-card">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" asChild className="shrink-0">
+            <Link to="/companies">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+          </Button>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg premium-shadow">
+              {company.name.charAt(0)}
+            </div>
+            <div>
+              <h1 className="text-xl font-bold leading-tight">{company.name}</h1>
+              {cleanWebsite && (
+                <a href={validWebsiteUrl} target="_blank" rel="noreferrer" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 mt-0.5">
+                  <Globe className="w-3 h-3" />
+                  {cleanWebsite}
+                </a>
+              )}
+            </div>
           </div>
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline">Log Activity</Button>
-          <Button asChild>
+        <div className="md:ml-auto flex items-center gap-2 w-full md:w-auto">
+          <Button variant="outline" className="flex-1 md:flex-none">Log Activity</Button>
+          <Button asChild className="flex-1 md:flex-none">
             <a href="#proposals" onClick={() => {
               const tabTrigger = document.querySelector('[value="proposals"]') as HTMLElement;
               if (tabTrigger) tabTrigger.click();
@@ -209,8 +228,9 @@ export default function CompanyDetails() {
         {/* Main Content Area */}
         <ScrollArea className="flex-1 bg-muted/10">
           <div className="p-6 md:p-8 max-w-5xl">
-            <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="mb-6 bg-transparent border-b border-border w-full justify-start rounded-none p-0 h-auto overflow-x-auto">
+            <Tabs defaultValue="analysis" className="w-full">
+              <TabsList className="mb-6 bg-transparent border-b border-border w-full justify-start rounded-none p-0 h-auto overflow-x-auto flex-nowrap hide-scrollbar whitespace-nowrap flex">
+                <TabsTrigger value="analysis" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium text-primary">Analysis Pipeline</TabsTrigger>
                 <TabsTrigger value="overview" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Overview</TabsTrigger>
                 <TabsTrigger value="website" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Website</TabsTrigger>
                 <TabsTrigger value="contacts" className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:shadow-none rounded-none px-4 py-3 text-sm font-medium">Contacts</TabsTrigger>
@@ -227,6 +247,9 @@ export default function CompanyDetails() {
               </TabsList>
               
               <div className="mt-4">
+                <TabsContent value="analysis" className="m-0">
+                  <AnalysisTab company={company} onAnalysisComplete={fetchCompany} />
+                </TabsContent>
                 <TabsContent value="overview" className="m-0 border-0 p-0"><LeadOverviewTab lead={formattedLead as any} /></TabsContent>
                 <TabsContent value="website" className="m-0 border-0 p-0"><WebsiteTab company={company} /></TabsContent>
                 <TabsContent value="contacts" className="m-0 border-0 p-0"><ContactsTab company={company} /></TabsContent>
@@ -235,7 +258,7 @@ export default function CompanyDetails() {
                 <TabsContent value="business" className="m-0 border-0 p-0"><BusinessTab company={company} /></TabsContent>
                 <TabsContent value="social" className="m-0 border-0 p-0"><SocialTab company={company} /></TabsContent>
                 <TabsContent value="signals" className="m-0 border-0 p-0"><SignalsTab company={company} /></TabsContent>
-                <TabsContent value="audit" className="m-0 border-0 p-0"><WebsiteAuditTab auditData={formattedLead.audit as any} /></TabsContent>
+                <TabsContent value="audit" className="m-0 border-0 p-0"><WebsiteAuditTab audit={formattedLead.audit as any} /></TabsContent>
                 <TabsContent value="insights" className="m-0 border-0 p-0"><AIInsightsTab intelligence={formattedLead.intelligence} /></TabsContent>
                 <TabsContent value="proposals" className="m-0 border-0 p-0"><ProposalsTab companyId={company.id} /></TabsContent>
                 <TabsContent value="timeline" className="m-0 border-0 p-0"><ActivityTimelineTab activities={formattedLead.activities} /></TabsContent>

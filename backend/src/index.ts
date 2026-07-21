@@ -25,6 +25,7 @@ import agentRoutes from './api/routes/agent.routes.js';
 import searchRoutes from './api/routes/search.routes.js';
 import trackingRoutes from './api/routes/tracking.routes.js';
 import auditRoutes from './api/routes/audit.routes.js';
+import analysisRoutes from './api/routes/analysis.routes.js';
 
 // Initialize background workers
 import { bullBoardAdapter } from './orchestration/BullBoard.js';
@@ -74,6 +75,7 @@ app.use('/api/agent', agentRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/analysis', analysisRoutes);
 
 // Start server
 app.listen(PORT, () => {

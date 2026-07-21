@@ -3,7 +3,7 @@ import axios from "axios";
 import { CompanyCard } from "./CompanyCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, ArrowDownWideNarrow, Loader2 } from "lucide-react";
+import { Search, Filter, ArrowDownWideNarrow, Loader2, Sparkles } from "lucide-react";
 
 export function CompanyList() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -11,7 +11,10 @@ export function CompanyList() {
   const [loading, setLoading] = useState(true);
   const [toastLines, setToastLines] = useState<string[] | null>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
+    // ... (fetch logic remains unchanged)
     const fetchCompanies = async () => {
       try {
         setLoading(true);
@@ -53,6 +56,33 @@ export function CompanyList() {
     fetchCompanies();
   }, []);
 
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkAnalyze = async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      setLoading(true);
+      await axios.post("http://localhost:3000/api/analysis/bulk", {
+        companyIds: Array.from(selectedIds)
+      });
+      setSelectedIds(new Set());
+      setToastLines(["Bulk analysis started", "Check individual profiles for progress"]);
+      setTimeout(() => setToastLines(null), 5000);
+    } catch (err) {
+      console.error("Failed bulk analysis", err);
+      alert("Failed to start bulk analysis.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeleteCompany = async (companyId: string) => {
     if (!window.confirm("Delete this company and all associated data? This action cannot be undone.")) {
       return;
@@ -88,7 +118,7 @@ export function CompanyList() {
   return (
     <div className="space-y-6">
       {/* Command Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between p-4 bg-card border border-border/60 shadow-sm rounded-lg">
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between p-4 premium-card">
         <div className="relative w-full sm:w-96 flex-shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
@@ -99,6 +129,18 @@ export function CompanyList() {
           />
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+          {selectedIds.size > 0 && (
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="gap-2 shrink-0 bg-primary hover:bg-primary/90"
+              onClick={handleBulkAnalyze}
+              disabled={loading}
+            >
+              <Sparkles className="w-4 h-4" />
+              Analyze Selected ({selectedIds.size})
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="gap-2 shrink-0">
             <Filter className="w-4 h-4" />
             Missing Integrations
@@ -131,6 +173,8 @@ export function CompanyList() {
               key={company.id || idx} 
               company={company} 
               onDelete={handleDeleteCompany}
+              isSelected={selectedIds.has(company.id)}
+              onToggleSelect={handleToggleSelect}
             />
           ))
         )}

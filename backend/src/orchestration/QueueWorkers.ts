@@ -34,9 +34,11 @@ import { ContactDiscoveryService } from '../services/ContactDiscoveryService.js'
 import { LeadScoringService } from '../services/LeadScoringService.js';
 
 
+import { analysisWorker } from './AnalysisWorker.js';
+
 // We import outreachWorker here to ensure it initializes and starts processing.
 // Export it if needed
-export { outreachWorker, identityResolutionWorker, websiteIntelligenceWorker };
+export { outreachWorker, identityResolutionWorker, websiteIntelligenceWorker, analysisWorker };
 
 // Worker Options
 const workerOptions = {
@@ -612,6 +614,7 @@ attachLifecycleLogs(websiteAuditWorker, 'Website Audit');
 attachLifecycleLogs(aiInsightsWorker, 'AI Insights');
 attachLifecycleLogs(leadScoringWorker, 'Lead Scoring');
 attachLifecycleLogs(buyingSignalsWorker, 'Buying Signals');
+attachLifecycleLogs(analysisWorker, 'Company Analysis');
 
 console.log('=== ALL BULLMQ WORKERS SUCCESSFULLY REGISTERED ===');
 

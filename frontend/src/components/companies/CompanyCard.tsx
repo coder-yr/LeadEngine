@@ -1,4 +1,5 @@
 import { Company } from "@/types/company";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,9 +22,11 @@ import {
 interface CompanyCardProps {
   company: Company;
   onDelete?: (id: string) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
-export function CompanyCard({ company, onDelete }: CompanyCardProps) {
+export function CompanyCard({ company, onDelete, isSelected = false, onToggleSelect }: CompanyCardProps) {
   const { intelligence } = company;
 
   const getScoreColor = (score: number) => {
@@ -53,12 +56,20 @@ export function CompanyCard({ company, onDelete }: CompanyCardProps) {
   );
 
   return (
-    <Card className="overflow-hidden border-border/50 shadow-sm hover:shadow-md transition-all duration-200 group bg-card">
+    <Card className={`premium-card overflow-hidden group ${isSelected ? 'ring-2 ring-primary bg-primary/5' : 'bg-card'}`}>
       <CardContent className="p-0">
         <div className="flex flex-col lg:flex-row">
           
           {/* Column 1: Company Profile & Scores (approx 35%) */}
-          <div className="p-6 flex-1 lg:max-w-[35%] lg:border-r border-border">
+          <div className="p-6 flex-1 lg:max-w-[35%] lg:border-r border-border relative">
+            {onToggleSelect && (
+              <div className="absolute top-4 right-4 z-10">
+                <Checkbox 
+                  checked={isSelected}
+                  onCheckedChange={() => onToggleSelect(company.id)}
+                />
+              </div>
+            )}
             <div className="flex items-start gap-4 mb-4">
               <div className="w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xl flex-shrink-0">
                 {company.name.charAt(0)}

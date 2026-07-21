@@ -8,7 +8,7 @@ const sharedQueueOptions: Omit<QueueOptions, 'connection'> = {
       type: 'exponential',
       delay: 5000,
     },
-    removeOnComplete: true,
+    removeOnComplete: { count: 100, age: 24 * 3600 }, // Keep last 100 completed jobs (up to 24 hours) for dashboard visibility
     removeOnFail: false, // Keep failed jobs so we can inspect them before moving to DLQ or if they natively fail
   },
 };
@@ -87,7 +87,16 @@ export const proposalGenerationQueue = new Queue('proposal-generation-queue', {
   ...sharedQueueOptions,
 });
 
+export const analysisQueue = new Queue('analysis-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
 // Dead Letter Queues (DLQs)
+export const failedAnalysisQueue = new Queue('failed-analysis', {
+  connection: redisConfig,
+});
+
 export const failedDiscoveryQueue = new Queue('failed-discovery', {
   connection: redisConfig,
 });

@@ -762,10 +762,20 @@ def main():
         print(json.dumps(output))
 
     except requests.exceptions.MissingSchema:
-        logger.exception("Scraping failed: MissingSchema")
+        logger.error("Scraping failed: MissingSchema")
         output = {
             "success": False,
             "error": "MissingSchema",
+            "contacts": [],
+            "metrics": {"fetchSucceeded": False, "pagesVisited": 0}
+        }
+        print(json.dumps(output))
+        sys.exit(1)
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+        logger.error(f"Network error while connecting to {website_url}: {e}")
+        output = {
+            "success": False,
+            "error": "NetworkError",
             "contacts": [],
             "metrics": {"fetchSucceeded": False, "pagesVisited": 0}
         }

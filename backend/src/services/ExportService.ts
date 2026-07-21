@@ -62,6 +62,17 @@ export class ExportService {
     });
     
     const companySheet = xlsx.utils.json_to_sheet(companyData);
+    companySheet['!cols'] = [
+      { wch: 30 }, // Company Name
+      { wch: 15 }, // Phone
+      { wch: 25 }, // Email
+      { wch: 30 }, // Website
+      { wch: 40 }, // Address
+      { wch: 20 }, // Industry
+      { wch: 15 }, // Source
+      { wch: 12 }, // Lead Score
+      { wch: 15 }  // Pipeline Stage
+    ];
     xlsx.utils.book_append_sheet(wb, companySheet, 'Companies');
 
     // Fetch related contacts and intelligence for the companies
@@ -86,6 +97,16 @@ export class ExportService {
           'LinkedIn': c.linkedin_url || ''
         }));
         const contactSheet = xlsx.utils.json_to_sheet(contactData);
+        contactSheet['!cols'] = [
+          { wch: 30 }, // Company Name
+          { wch: 15 }, // First Name
+          { wch: 15 }, // Last Name
+          { wch: 25 }, // Email
+          { wch: 15 }, // Phone
+          { wch: 20 }, // Title
+          { wch: 18 }, // Is Decision Maker
+          { wch: 35 }  // LinkedIn
+        ];
         xlsx.utils.book_append_sheet(wb, contactSheet, 'Contacts');
       }
 
@@ -106,7 +127,45 @@ export class ExportService {
           'Summary': i.summary || ''
         }));
         const intelSheet = xlsx.utils.json_to_sheet(intelData);
+        intelSheet['!cols'] = [
+          { wch: 30 }, // Company Name
+          { wch: 22 }, // Digital Maturity Score
+          { wch: 40 }, // Services Needed
+          { wch: 15 }, // CRM Detected
+          { wch: 18 }, // WhatsApp Detected
+          { wch: 18 }, // Booking Detected
+          { wch: 60 }  // Summary
+        ];
         xlsx.utils.book_append_sheet(wb, intelSheet, 'Intelligence');
+      }
+
+      // Sheet 4: Signals
+      const { data: signals } = await supabase
+        .from('company_signals')
+        .select('*, companies(name)')
+        .in('company_id', companyIds);
+
+      if (signals && signals.length > 0) {
+        const signalData = signals.map(s => ({
+          'Company Name': s.companies?.name || '',
+          'Intent Score': s.intent_score || 0,
+          'No Website': s.no_website ? 'Yes' : 'No',
+          'No CRM': s.no_crm ? 'Yes' : 'No',
+          'No WhatsApp': s.no_whatsapp ? 'Yes' : 'No',
+          'Poor SEO': s.poor_seo ? 'Yes' : 'No',
+          'No Booking System': s.no_booking_system ? 'Yes' : 'No',
+        }));
+        const signalSheet = xlsx.utils.json_to_sheet(signalData);
+        signalSheet['!cols'] = [
+          { wch: 30 }, // Company Name
+          { wch: 15 }, // Intent Score
+          { wch: 15 }, // No Website
+          { wch: 15 }, // No CRM
+          { wch: 15 }, // No WhatsApp
+          { wch: 15 }, // Poor SEO
+          { wch: 18 }  // No Booking System
+        ];
+        xlsx.utils.book_append_sheet(wb, signalSheet, 'Buying Signals');
       }
     }
 

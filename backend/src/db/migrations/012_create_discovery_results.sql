@@ -5,9 +5,9 @@ CREATE TABLE IF NOT EXISTS discovery_results (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     job_id UUID NOT NULL REFERENCES discovery_jobs(id) ON DELETE CASCADE,
     company_id UUID REFERENCES companies(id) ON DELETE SET NULL,
-    source VARCHAR(50) NOT NULL,
+    source TEXT NOT NULL,
     raw_name VARCHAR(255),
-    raw_phone VARCHAR(50),
+    raw_phone TEXT,
     raw_email VARCHAR(255),
     raw_website VARCHAR(512),
     raw_address TEXT,
@@ -27,7 +27,7 @@ CREATE INDEX IF NOT EXISTS idx_discovery_results_raw_phone ON discovery_results(
 CREATE INDEX IF NOT EXISTS idx_discovery_results_raw_website ON discovery_results(raw_website);
 
 -- Add discovery tracking columns to companies
-ALTER TABLE companies ADD COLUMN IF NOT EXISTS discovery_source VARCHAR(50);
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS discovery_source TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS discovery_job_id UUID REFERENCES discovery_jobs(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS idx_companies_discovery_source ON companies(discovery_source);

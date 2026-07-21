@@ -24,10 +24,8 @@ const STAGE_TO_QUEUE: Partial<Record<DiscoveryStage, { queue: Queue; jobName: st
   WEBSITE_CRAWLED:      { queue: confidenceEvaluationQueue, jobName: 'evaluate-confidence' },
   CONFIDENCE_EVALUATED: { queue: adaptiveEnrichmentQueue,   jobName: 'enrich-lead' }, 
   ADAPTIVE_ENRICHMENT:  { queue: contactDiscoveryQueue,     jobName: 'discover-contacts' },
-  CONTACTS_EXTRACTED:   { queue: aiInsightsQueue,           jobName: 'generate-ai-insights' },
-  AI_INTELLIGENCE:      { queue: leadScoringQueue,          jobName: 'score-lead' },
-  LEAD_SCORED:          { queue: proposalGenerationQueue,   jobName: 'generate-proposal' },
-  // COMPLETE has no next stage
+  // Pipeline now stops after CONTACTS_EXTRACTED.
+  // The terminal state becomes READY_FOR_ANALYSIS instead of chaining to AI_INTELLIGENCE.
 };
 
 /**
@@ -69,16 +67,16 @@ export class StageDispatcher {
     // Compute next stage
     const nextStageKey = STAGE_TO_QUEUE[completedStage];
     if (!nextStageKey) {
-      logger.info({ leadIdentityId, completedStage }, 'Lead reached terminal stage READY');
+      logger.info({ leadIdentityId, completedStage }, 'Lead reached terminal stage READY_FOR_ANALYSIS');
       const svc = this.getIdentityService(supabase);
-      await svc.advanceStage(leadIdentityId, 'READY', {
+      await svc.advanceStage(leadIdentityId, 'READY_FOR_ANALYSIS', {
         fromStage: completedStage,
         companyId,
         durationMs,
         success: true,
         metadata,
       });
-      return 'READY';
+      return 'READY_FOR_ANALYSIS';
     }
 
     // Determine next stage from queue mapping
