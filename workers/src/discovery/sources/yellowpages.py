@@ -11,6 +11,8 @@ import urllib.parse
 from typing import List
 
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from bs4 import BeautifulSoup
 
 from discovery.base_source import BaseDiscoverySource, DiscoveryRecord
@@ -62,8 +64,7 @@ class YellowPagesSource(BaseDiscoverySource):
                 break
                 
             try:
-                # yellowpages.in usually formats as /search/{city}/{keyword} or /{city}/{keyword}
-                url = f"https://www.yellowpages.in/{city_slug}/{kw_slug}"
+                url = f"https://www.yellowpages.in/search/{city_slug}/{kw_slug}"
                 if page > 1:
                     url += f"?page={page}"
                     
@@ -71,20 +72,13 @@ class YellowPagesSource(BaseDiscoverySource):
                     "User-Agent": random_user_agent(),
                     "Accept": "text/html",
                 }
-                resp = requests.get(url, headers=headers, timeout=12)
-                
-                # If first URL format fails, try the alternative
-                if resp.status_code == 404 and page == 1:
-                    url = f"https://www.yellowpages.in/search/{city_slug}/{kw_slug}"
-                    resp = requests.get(url, headers=headers, timeout=12)
+                resp = requests.get(url, headers=headers, timeout=12, verify=False)
                     
                 if resp.status_code != 200:
                     break
 
                 soup = BeautifulSoup(resp.text, "html.parser")
-                listings = soup.find_all("div", class_="listing-item")
-                if not listings:
-                    listings = soup.find_all("div", class_="biz-listing")
+                listings = soup.find_all("div", class_="eachPopular")
                     
                 if not listings:
                     break
@@ -93,7 +87,7 @@ class YellowPagesSource(BaseDiscoverySource):
                     if len(records) >= max_results:
                         break
                         
-                    name_el = listing.find("h2", class_="listing-name") or listing.find("a", class_="biz-name")
+                    name_el = listing.find("a", class_="eachPopularTitle")
                     if not name_el:
                         continue
                         
@@ -101,18 +95,39 @@ class YellowPagesSource(BaseDiscoverySource):
                     if not name:
                         continue
 
-                    # Website might be available directly in YP
+                    # Website extraction
                     website = None
-                    web_el = listing.find("a", class_="listing-website")
-                    if web_el and web_el.get("href"):
-                        website = web_el["href"]
+                    web_el = listing.find("div", class_="eachPopularLink")
+                    if web_el:
+                        a_tag = web_el.find("a")
+                        if a_tag and a_tag.get("href"):
+                            website = a_tag["href"]
+                            if website and not website.startswith("http"):
+                                website = "https://" + website
+
+                    # Phone extraction
+                    phone = None
+                    phone_el = listing.find("a", class_="businessContact")
+                    if phone_el:
+                        phone_href = phone_el.get("href", "")
+                        phone = phone_href.replace("tel:", "").strip()
+                        if not phone:
+                            phone = phone_el.get_text(strip=True)
+                            
+                    # Address extraction
+                    address = None
+                    address_el = listing.find("address", class_="businessArea")
+                    if address_el:
+                        address = address_el.get_text(separator=" ", strip=True).replace("\n", " ")
 
                     rec = DiscoveryRecord(
                         business_name=name,
                         source=self.name,
                         website=website,
+                        phone=phone,
+                        address=address,
                     )
-                    rec.quality_score = 10 + (20 if website else 0)
+                    rec.quality_score = 10 + (20 if website else 0) + (10 if phone else 0)
                     records.append(rec)
 
             except Exception as exc:

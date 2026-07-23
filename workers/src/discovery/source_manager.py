@@ -185,12 +185,20 @@ class DiscoverySourceManager:
         # Cross-source deduplication on current results to check if we have websites
         unique_so_far, _ = self._dedup(all_results)
         website_found = any(r.website for r in unique_so_far)
+        
+        target_count = max_results or TIER_MAX_RESULTS[1]
+        needs_more = len(unique_so_far) < target_count
 
-        # Run Tier 3 ONLY if website is missing
-        if not website_found:
+        # Run Tier 3 IF:
+        # 1. No website was found (fallback mode)
+        # 2. User explicitly selected sources
+        # 3. We haven't reached the requested max_results yet
+        run_tier_3 = (not website_found) or (requested_sources is not None) or needs_more
+        
+        if run_tier_3:
             tier3_sources = by_tier.get(3, [])
             if tier3_sources:
-                logger.info("[SourceManager] No website found in Tier 1/2. Executing Tier 3 sources.")
+                logger.info(f"[SourceManager] Executing Tier 3 sources (website_found={website_found}, explicit={requested_sources is not None}, needs_more={needs_more}).")
                 tier_max = (max_results or TIER_MAX_RESULTS[3])
                 timeout = TIER_TIMEOUTS[3]
                 t3_outputs = await asyncio.gather(
@@ -285,7 +293,13 @@ class DiscoverySourceManager:
         results = []
         errors = []
 
-        async def run_one(src: BaseDiscoverySource):
+        async def run_one(src: BaseDiscoverySource, index: int):
+            # Stagger tier-3 sources so they don't hit fallbacks concurrently
+            if src.tier == 3 and index > 0:
+                stagger_delay = index * 2.0
+                logger.info(f"[SourceManager] Staggering {src.name} by {stagger_delay}s")
+                await asyncio.sleep(stagger_delay)
+
             start = time.time()
             try:
                 if timeout_sec:
@@ -310,7 +324,7 @@ class DiscoverySourceManager:
                 errors.append({"source": src.name, "error": err})
                 return src.name, [], err, duration
 
-        tasks = [run_one(src) for src in sources]
+        tasks = [run_one(src, idx) for idx, src in enumerate(sources)]
         tier_results = await asyncio.gather(*tasks, return_exceptions=False)
         return list(tier_results), errors
 

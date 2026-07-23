@@ -27,7 +27,7 @@ from typing import List, Optional, Set
 import requests
 from bs4 import BeautifulSoup
 
-from discovery.anti_block import random_user_agent
+from discovery.anti_block import random_user_agent, get_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -133,72 +133,6 @@ def extract_phone_from_text(text: str) -> Optional[str]:
     return None
 
 
-def parse_ddg_html(
-    html: str,
-    excluded_domains: Optional[Set[str]] = None,
-    max_results: int = 50,
-    extract_phones: bool = True,
-) -> List[DDGResult]:
-    """
-    Parse DuckDuckGo HTML search results page.
-
-    Returns a list of DDGResult with clean URLs, titles, snippets, and phones.
-    """
-    results: List[DDGResult] = []
-    seen_domains: Set[str] = set()
-
-    soup = BeautifulSoup(html, "html.parser")
-
-    for result_div in soup.find_all("div", class_="result"):
-        if len(results) >= max_results:
-            break
-
-        # Extract URL
-        url_el = result_div.find("a", class_="result__url")
-        if not url_el:
-            continue
-
-        href = url_el.get("href", "")
-        href = unwrap_ddg_redirect(href)
-
-        if not is_valid_domain(href, excluded_domains):
-            continue
-
-        domain = extract_domain(href)
-        if domain in seen_domains:
-            continue
-        seen_domains.add(domain)
-
-        # Extract title
-        title_el = result_div.find("a", class_="result__title")
-        title = title_el.get_text(strip=True) if title_el else ""
-        clean = clean_title(title)
-
-        if not clean:
-            continue
-
-        # Extract snippet
-        snippet_el = result_div.find("div", class_="result__snippet") or result_div.find("a", class_="result__snippet")
-        snippet = snippet_el.get_text(strip=True) if snippet_el else ""
-
-        # Extract phone from snippet
-        phone = None
-        if extract_phones:
-            phone = extract_phone_from_text(snippet)
-            if not phone:
-                phone = extract_phone_from_text(title)
-
-        results.append(DDGResult(
-            title=clean,
-            url=href,
-            domain=domain,
-            snippet=snippet[:300],
-            phone=phone,
-        ))
-
-    return results
-
-
 def search_ddg(
     query: str,
     max_results: int = 30,
@@ -208,58 +142,66 @@ def search_ddg(
     timeout: int = 12,
 ) -> List[DDGResult]:
     """
-    Execute a DuckDuckGo HTML search and return parsed results.
-
-    Supports multi-page by passing pages > 1 (uses s= offset).
+    Execute a DuckDuckGo search using the ddgs library.
+    Bypasses the HTML blocks by using the internal API.
     """
     all_results: List[DDGResult] = []
     seen_domains: Set[str] = set()
-
-    for page_num in range(pages):
-        offset = page_num * 30
-        params = {"q": query}
-        if offset > 0:
-            params["s"] = str(offset)
-            params["dc"] = str(offset + 1)
-
-        try:
-            headers = {
-                "User-Agent": random_user_agent(),
-                "Accept": "text/html,application/xhtml+xml",
-                "Accept-Language": "en-IN,en;q=0.9",
-                "Referer": "https://duckduckgo.com/",
-            }
-            resp = requests.get(
-                DDG_HTML_URL, params=params, headers=headers, timeout=timeout
-            )
-            resp.raise_for_status()
-
-            page_results = parse_ddg_html(
-                resp.text,
-                excluded_domains=excluded_domains,
-                max_results=max_results,
-                extract_phones=extract_phones,
-            )
-
-            for r in page_results:
-                if r.domain not in seen_domains:
-                    seen_domains.add(r.domain)
-                    all_results.append(r)
-
+    
+    try:
+        from ddgs import DDGS
+        import time
+        import random
+        
+        # Add a small human delay
+        delay = random.uniform(1.0, 2.5)
+        logger.debug(f"[ddg_parser] Sleeping {delay:.1f}s before DDGS query to avoid rate limits")
+        time.sleep(delay)
+        
+        # Request more than max_results because we might filter out excluded domains
+        fetch_limit = max_results * 2
+        ddgs = DDGS()
+        
+        results_iter = ddgs.text(query, max_results=fetch_limit)
+        
+        for r in results_iter:
+            href = r.get("href", "")
+            title = r.get("title", "")
+            snippet = r.get("body", "")
+            
+            if not is_valid_domain(href, excluded_domains):
+                continue
+                
+            domain = extract_domain(href)
+            if domain in seen_domains:
+                continue
+            seen_domains.add(domain)
+            
+            clean = clean_title(title)
+            if not clean:
+                continue
+                
+            phone = None
+            if extract_phones:
+                phone = extract_phone_from_text(snippet)
+                if not phone:
+                    phone = extract_phone_from_text(title)
+                    
+            all_results.append(DDGResult(
+                title=clean,
+                url=href,
+                domain=domain,
+                snippet=snippet[:300],
+                phone=phone,
+            ))
+            
             if len(all_results) >= max_results:
                 break
-
-            # Don't hammer DDG between pages
-            if page_num < pages - 1:
-                import time
-                time.sleep(1.5 + (page_num * 0.5))
-
-        except Exception as exc:
-            logger.warning(f"[ddg_parser] Page {page_num + 1} failed: {exc}")
-            break
-
-    return all_results[:max_results]
-
+                
+    except Exception as exc:
+        logger.warning(f"[ddg_parser] DDGS search failed: {exc}")
+        
+    return all_results
 
 def dork_search(
     site: str,

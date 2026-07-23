@@ -12,6 +12,8 @@ import urllib.parse
 from typing import List
 
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from bs4 import BeautifulSoup
 
 from discovery.base_source import BaseDiscoverySource, DiscoveryRecord
@@ -72,7 +74,7 @@ class GrotalSource(BaseDiscoverySource):
                     "User-Agent": random_user_agent(),
                     "Accept": "text/html",
                 }
-                resp = requests.get(url, headers=headers, timeout=12)
+                resp = requests.get(url, headers=headers, timeout=12, verify=False)
                 if resp.status_code != 200:
                     break
 
