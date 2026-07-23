@@ -160,7 +160,9 @@ def search_ddg(
         
         # Request more than max_results because we might filter out excluded domains
         fetch_limit = max_results * 2
-        ddgs = DDGS()
+        
+        proxy = get_proxy()
+        ddgs = DDGS(proxy=proxy) if proxy else DDGS()
         
         results_iter = ddgs.text(query, max_results=fetch_limit)
         

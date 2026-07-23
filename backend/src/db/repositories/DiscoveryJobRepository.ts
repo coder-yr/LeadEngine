@@ -4,6 +4,7 @@ export interface DiscoveryJobInput {
   keyword: string;
   city: string;
   sources: string[];
+  max_results?: number;
 }
 
 export interface DiscoveryJobUpdate {

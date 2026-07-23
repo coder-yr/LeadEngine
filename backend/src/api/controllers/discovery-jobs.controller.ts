@@ -19,6 +19,7 @@ export class DiscoveryJobsController {
         keyword: input.keyword,
         city: input.city,
         sources: input.sources,
+        max_results: input.max_results,
       });
 
       res.status(202).json({

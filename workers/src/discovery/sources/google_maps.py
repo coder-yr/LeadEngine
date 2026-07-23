@@ -74,34 +74,66 @@ class GoogleMapsSource(BaseDiscoverySource):
                         await page.goto(url, wait_until="domcontentloaded", timeout=60_000)
                         await human_delay(1500, 3000)
 
-                        # Wait for the results feed
+                        # Adaptive scrolling and chunked extraction
                         feed_selector = 'div[role="feed"]'
                         try:
                             await page.wait_for_selector(feed_selector, timeout=15_000)
                         except Exception:
                             logger.warning("[google_maps] Feed not found, continuing anyway")
 
-                        # Adaptive scrolling
                         listings_selector = ".hfpxzc, a[href*='/maps/place/']"
-                        await self._adaptive_scroll(page, feed_selector, listings_selector, max_results)
-
-                        # Collect all listing elements
-                        listings = await page.locator(listings_selector).all()
-                        logger.info(f"[google_maps] Found {len(listings)} listings after scrolling")
-
-                        # Extract data from each listing
                         seen_names: Set[str] = set()
-                        for i, listing in enumerate(listings):
+                        stalls = 0
+
+                        for scroll_num in range(MAX_SCROLL_ABSOLUTE):
                             if len(extracted) >= max_results:
                                 break
 
-                            rec = await self._extract_with_retry(page, listing, seen_names)
-                            if rec:
-                                extracted.append(rec)
+                            # Process currently rendered listings
+                            listings = await page.locator(listings_selector).all()
+                            found_new = False
 
-                            # Log progress every 20 listings
-                            if (i + 1) % 20 == 0:
-                                logger.info(f"[google_maps] Progress: {len(extracted)} extracted from {i + 1} listings")
+                            for listing in listings:
+                                if len(extracted) >= max_results:
+                                    break
+                                
+                                try:
+                                    name = await listing.get_attribute("aria-label", timeout=500)
+                                    if not name:
+                                        continue
+
+                                    name_key = name.strip().lower()
+                                    if name_key in seen_names:
+                                        continue
+
+                                    rec = await self._extract_with_retry(page, listing, seen_names)
+                                    if rec:
+                                        extracted.append(rec)
+                                        found_new = True
+
+                                        if len(extracted) % 20 == 0:
+                                            logger.info(f"[google_maps] Progress: {len(extracted)} extracted")
+                                except Exception:
+                                    pass
+
+                            if not found_new:
+                                stalls += 1
+                                if stalls >= MAX_SCROLL_STALLS:
+                                    logger.info(f"[google_maps] Stopping scroll: {stalls} consecutive stalls at {len(extracted)} listings")
+                                    break
+                            else:
+                                stalls = 0
+
+                            # Scroll down for the next chunk
+                            await page.evaluate(
+                                f"const f = document.querySelector('{feed_selector}'); if (f) f.scrollTop = f.scrollHeight;"
+                            )
+                            await page.wait_for_timeout(SCROLL_PAUSE_MS + random.randint(0, 500))
+
+                            end_marker = await page.query_selector("span.HlvSq, p.fontBodyMedium > span:has-text('end of results')")
+                            if end_marker:
+                                logger.info(f"[google_maps] End of results reached at scroll {scroll_num + 1}")
+                                break
 
                         if extracted:
                             break  # Success — no need to retry
@@ -116,57 +148,6 @@ class GoogleMapsSource(BaseDiscoverySource):
 
         logger.info(f"[google_maps] Completed: {len(extracted)} results")
         return extracted
-
-    async def _adaptive_scroll(
-        self, page: Page, feed_selector: str, listings_selector: str, target: int
-    ) -> None:
-        """
-        Scroll the feed until:
-          - We have enough listings (>= target)
-          - OR we hit MAX_SCROLL_STALLS consecutive scrolls with 0 new listings
-          - OR we hit the absolute scroll ceiling
-          - OR we see the "end of results" marker
-        """
-        prev_count = len(await page.locator(listings_selector).all())
-        stalls = 0
-
-        for scroll_num in range(MAX_SCROLL_ABSOLUTE):
-            # Scroll to bottom of feed
-            await page.evaluate(
-                f"const f = document.querySelector('{feed_selector}'); if (f) f.scrollTop = f.scrollHeight;"
-            )
-            await page.wait_for_timeout(SCROLL_PAUSE_MS + random.randint(0, 500))
-
-            # Check for "end of results" marker
-            end_marker = await page.query_selector("span.HlvSq, p.fontBodyMedium > span:has-text('end of results')")
-            if end_marker:
-                logger.info(f"[google_maps] End of results reached at scroll {scroll_num + 1}")
-                break
-
-            # Count current listings
-            current_count = len(await page.locator(listings_selector).all())
-            new_found = current_count - prev_count
-
-            if new_found == 0:
-                stalls += 1
-                if stalls >= MAX_SCROLL_STALLS:
-                    logger.info(
-                        f"[google_maps] Stopping scroll: {stalls} consecutive stalls "
-                        f"at {current_count} listings (scroll {scroll_num + 1})"
-                    )
-                    break
-            else:
-                stalls = 0  # Reset stall counter
-
-            prev_count = current_count
-
-            # Stop if we have enough
-            if current_count >= target:
-                logger.info(f"[google_maps] Target reached: {current_count} >= {target}")
-                break
-
-        final_count = len(await page.locator(listings_selector).all())
-        logger.info(f"[google_maps] Scrolling complete: {final_count} listings visible")
 
     async def _extract_with_retry(
         self, page: Page, listing: Locator, seen_names: Set[str]

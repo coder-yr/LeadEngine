@@ -88,7 +88,7 @@ export class DiscoveryService {
       keyword: input.keyword,
       city: input.city,
       sources: input.sources,
-      max_results: 50,
+      max_results: input.max_results || 50,
     });
 
     if (runnerOutput.status === 'error') {
