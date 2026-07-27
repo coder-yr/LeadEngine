@@ -44,7 +44,7 @@ class GeminiClient:
     async def generate_json_with_search(
         self, 
         prompt: str, 
-        max_retries: int = 5,
+        max_retries: int = 2,
         timeout: int = 60
     ) -> Any:
         """
@@ -80,11 +80,8 @@ class GeminiClient:
                 logger.warning(f"[GeminiClient] Attempt {attempt}/{max_retries} failed: {error_msg}")
                 
                 if "429" in error_msg or "quota" in error_msg.lower():
-                    if attempt == max_retries:
-                        raise GeminiRateLimitError("Gemini Quota Exceeded permanently")
-                    logger.warning(f"[GeminiClient] Rate limit hit. Waiting 60s for quota to reset...")
-                    await asyncio.sleep(60)
-                    continue
+                    # Fail fast on rate limits so SearchRouter can fallback to other providers
+                    raise GeminiRateLimitError("Gemini Quota Exceeded - Failing fast to trigger fallback")
                 elif attempt == max_retries:
                     raise GeminiError(f"Failed after {max_retries} attempts. Last error: {error_msg}")
                 

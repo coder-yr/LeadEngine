@@ -5,7 +5,6 @@ from typing import List
 
 from ai.providers.SearchProvider import SearchProvider
 from ai.providers.GeminiProvider import GeminiProvider
-from ai.providers.OpenRouterProvider import OpenRouterProvider
 from ai.providers.BraveProvider import BraveProvider
 from ai.providers.TavilyProvider import TavilyProvider
 from ai.SearchMemory import SearchMemory
@@ -27,14 +26,13 @@ class SearchRouter:
         # Load available providers
         self.providers: dict[str, SearchProvider] = {
             "gemini": GeminiProvider(),
-            "openrouter": OpenRouterProvider(),
             "brave": BraveProvider(),
             "tavily": TavilyProvider()
         }
         
-        # Load weights from config (e.g. "gemini=100,openrouter=80,brave=70,tavily=60")
+        # Load weights from config (e.g. "gemini=100,brave=70,tavily=60")
         self.weights = {}
-        priority_str = os.getenv("SEARCH_PROVIDER_PRIORITY", "gemini=100,openrouter=80,brave=70,tavily=60")
+        priority_str = os.getenv("SEARCH_PROVIDER_PRIORITY", "gemini=100,brave=70,tavily=60")
         for item in priority_str.split(","):
             if "=" in item:
                 prov, weight = item.split("=")
@@ -86,7 +84,11 @@ class SearchRouter:
             return []
             
         all_records = []
+        # Initialize seen_domains with the already discovered companies so we don't ask the AI for leads we already have!
         seen_domains = set()
+        if discovered_companies:
+            for domain in discovered_companies:
+                seen_domains.add(domain.lower().replace("www.", ""))
         
         # Calculate time budget
         start_time = time.time()
@@ -126,6 +128,7 @@ class SearchRouter:
                         if domain and domain not in seen_domains:
                             seen_domains.add(domain)
                             all_records.append(rec)
+                            discovered_companies.append(rec.business_name)
                             added_this_round += 1
                             
                     prov_latency = time.time() - prov_start
@@ -136,7 +139,13 @@ class SearchRouter:
                     )
                     
                     success = True
-                    break # Success! Break out of fallback loop and move to next query
+                    
+                    if len(all_records) >= target_results:
+                        break # Success! Break out of fallback loop because we hit the target
+                    
+                    # Target not reached yet! 
+                    # Continue to the NEXT provider (e.g. Brave) for this exact same query
+                    # to aggressively squeeze out more leads using the discovered_companies exclusion list!
 
                 except Exception as e:
                     prov_latency = time.time() - prov_start

@@ -191,7 +191,7 @@ class DiscoverySourceManager:
 
         # Run Tier 3 IF:
         # 1. No website was found (fallback mode)
-        # 2. User explicitly selected sources
+        # 2. User explicitly selected sourcesl
         # 3. We haven't reached the requested max_results yet
         run_tier_3 = (not website_found) or (requested_sources is not None) or needs_more
         

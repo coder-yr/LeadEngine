@@ -90,14 +90,15 @@ class GoogleMapsSource(BaseDiscoverySource):
                                 break
 
                             # Process currently rendered listings
-                            listings = await page.locator(listings_selector).all()
+                            count = await page.locator(listings_selector).count()
                             found_new = False
 
-                            for listing in listings:
+                            for i in range(count):
                                 if len(extracted) >= max_results:
                                     break
                                 
                                 try:
+                                    listing = page.locator(listings_selector).nth(i)
                                     name = await listing.get_attribute("aria-label", timeout=500)
                                     if not name:
                                         continue
@@ -174,62 +175,78 @@ class GoogleMapsSource(BaseDiscoverySource):
             if name_key in seen_names:
                 return None
             seen_names.add(name_key)
-
-            # Click listing to open side panel
-            try:
-                await listing.scroll_into_view_if_needed(timeout=1000)
-                await listing.click(timeout=LISTING_CLICK_TIMEOUT)
-                await page.wait_for_timeout(PANEL_LOAD_WAIT)
-            except Exception:
-                return None
-
+            
             rec = DiscoveryRecord(business_name=name.strip(), source=self.name)
+            
+            # Extract basic info from the feed card if possible
+            rating_text = await listing.inner_text()
+            if "stars" in rating_text or "star" in rating_text:
+                match = re.search(r'([\d\.]+)\s*stars?', rating_text)
+                if match:
+                    rec.rating = match.group(1)
 
-            # Rating
-            rating_el = await page.query_selector('span[aria-label*="stars"]')
-            if rating_el:
-                label = await rating_el.get_attribute("aria-label")
-                rec.rating = label.split()[0] if label else None
+            # Get the URL
+            href = await listing.get_attribute("href", timeout=1000)
+            if not href:
+                return rec
+                
+            # Open listing in a new tab to avoid breaking the search page DOM
+            context = page.context
+            new_page = await context.new_page()
+            
+            try:
+                await new_page.goto(href, wait_until="domcontentloaded", timeout=10000)
+                await new_page.wait_for_timeout(PANEL_LOAD_WAIT)
+                
+                # Rating (fallback)
+                if not rec.rating:
+                    rating_el = await new_page.query_selector('span[aria-label*="stars"]')
+                    if rating_el:
+                        label = await rating_el.get_attribute("aria-label")
+                        rec.rating = label.split()[0] if label else None
 
-            # Address
-            addr_btn = await page.query_selector(
-                'button[data-item-id="address"], button[aria-label^="Address:"]'
-            )
-            if addr_btn:
-                label = await addr_btn.get_attribute("aria-label")
-                rec.address = (
-                    label.replace("Address: ", "").strip() if label else None
+                # Address
+                addr_btn = await new_page.query_selector(
+                    'button[data-item-id="address"], button[aria-label^="Address:"]'
                 )
+                if addr_btn:
+                    label = await addr_btn.get_attribute("aria-label")
+                    rec.address = (
+                        label.replace("Address: ", "").strip() if label else None
+                    )
 
-            # Phone
-            phone_btn = await page.query_selector(
-                'button[data-item-id^="phone:tel:"], button[aria-label^="Phone:"]'
-            )
-            if phone_btn:
-                label = await phone_btn.get_attribute("aria-label")
-                rec.phone = (
-                    label.replace("Phone: ", "").strip() if label else None
+                # Phone
+                phone_btn = await new_page.query_selector(
+                    'button[data-item-id^="phone:tel:"], button[aria-label^="Phone:"]'
                 )
+                if phone_btn:
+                    label = await phone_btn.get_attribute("aria-label")
+                    rec.phone = (
+                        label.replace("Phone: ", "").strip() if label else None
+                    )
 
-            # Website — with Google redirect cleanup
-            web_btn = await page.query_selector(
-                'a[data-item-id="authority"], a[aria-label^="Website:"]'
-            )
-            if web_btn:
-                raw_url = await web_btn.get_attribute("href")
-                rec.website = self._clean_url(raw_url)
+                # Website — with Google redirect cleanup
+                web_btn = await new_page.query_selector(
+                    'a[data-item-id="authority"], a[aria-label^="Website:"]'
+                )
+                if web_btn:
+                    raw_url = await web_btn.get_attribute("href")
+                    rec.website = self._clean_url(raw_url)
 
-            # Category extraction
-            category_el = await page.query_selector(
-                'button[data-item-id="category"], '
-                'button[jsaction*="category"] span, '
-                'span.DkEaL, '
-                'div.LrzXr'
-            )
-            if category_el:
-                cat_text = await category_el.inner_text()
-                if cat_text:
-                    rec.category = cat_text.strip()
+                # Category extraction
+                category_el = await new_page.query_selector(
+                    'button[data-item-id="category"], '
+                    'button[jsaction*="category"] span, '
+                    'span.DkEaL, '
+                    'div.LrzXr'
+                )
+                if category_el:
+                    cat_text = await category_el.inner_text()
+                    if cat_text:
+                        rec.category = cat_text.strip()
+                        
+            finally:
+                await new_page.close()
 
             rec.quality_score = self._quality(rec)
             return rec
