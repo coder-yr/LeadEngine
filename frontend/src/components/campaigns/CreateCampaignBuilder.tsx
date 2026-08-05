@@ -6,13 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Mail, Phone, MessageSquare } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export function CreateCampaignBuilder({ onCampaignCreated }: { onCampaignCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [companies, setCompanies] = useState<any[]>([]);
+
 
   // Form State
   const [name, setName] = useState("");
@@ -25,7 +25,7 @@ export function CreateCampaignBuilder({ onCampaignCreated }: { onCampaignCreated
   useEffect(() => {
     if (open) {
       axios.get("http://localhost:3000/api/companies").then((res) => {
-        setCompanies(res.data);
+
         if (res.data.length > 0) setCompanyId(res.data[0].id);
       });
     }
@@ -79,16 +79,9 @@ export function CreateCampaignBuilder({ onCampaignCreated }: { onCampaignCreated
     }
   };
 
-  const getChannelIcon = (channel: string) => {
-    if (channel === 'email') return <Mail className="w-4 h-4" />;
-    if (channel === 'linkedin') return <Users className="w-4 h-4" />;
-    return <MessageSquare className="w-4 h-4" />;
-  };
 
-  // Mock icons for rendering below
-  const Users = ({ className }: { className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-  );
+
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

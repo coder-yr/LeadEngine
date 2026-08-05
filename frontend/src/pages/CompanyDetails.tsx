@@ -14,9 +14,9 @@ import { LeadOverviewTab } from "@/components/leads/tabs/LeadOverviewTab"
 import { WebsiteAuditTab } from "@/components/leads/tabs/WebsiteAuditTab"
 import { AIInsightsTab } from "@/components/leads/tabs/AIInsightsTab"
 import { ActivityTimelineTab } from "@/components/leads/tabs/ActivityTimelineTab"
-import { ServicesNeededTab } from "@/components/leads/tabs/ServicesNeededTab"
+
 import { ContactsTab } from "@/components/leads/tabs/ContactsTab"
-import { CampaignsTab } from "@/components/leads/tabs/CampaignsTab"
+
 import { ProposalsTab } from "@/components/leads/tabs/ProposalsTab"
 import { AIAgentTab } from "@/components/leads/tabs/AIAgentTab"
 import { 

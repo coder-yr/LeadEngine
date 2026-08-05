@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Globe, Clock, CheckCircle2, XCircle, AlertTriangle, Activity, Code, Target, BrainCircuit, Users } from "lucide-react";
+import { Loader2, Globe, CheckCircle2, XCircle, AlertTriangle, Activity, Code, Target, BrainCircuit, Users } from "lucide-react";
 
 export default function WebsiteAuditTester() {
   const [url, setUrl] = useState("");

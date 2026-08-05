@@ -1,4 +1,4 @@
-import { Building2, Info, Users, MonitorSmartphone, TrendingUp, Link, Zap } from "lucide-react";
+import { Info, Users, MonitorSmartphone, TrendingUp, Link, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export function WebsiteTab({ company }: { company: any }) {
@@ -90,7 +90,7 @@ export function BusinessTab({ company }: { company: any }) {
   );
 }
 
-export function SocialTab({ company }: { company: any }) {
+export function SocialTab({}: { company?: any }) {
   return (
     <div className="p-6 bg-card rounded-lg border border-border shadow-sm">
       <h3 className="font-semibold text-lg flex items-center gap-2 mb-4">
@@ -106,7 +106,7 @@ export function SocialTab({ company }: { company: any }) {
   );
 }
 
-export function SignalsTab({ company }: { company: any }) {
+export function SignalsTab({}: { company?: any }) {
   const signals = [
     { label: "Has Booking System", active: true },
     { label: "Has CRM", active: false },

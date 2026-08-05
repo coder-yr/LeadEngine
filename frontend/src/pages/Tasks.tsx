@@ -3,12 +3,12 @@ import axios from "axios";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+
 import { CheckCircle2, Circle, Calendar, Phone, Mail, MessageSquare, Building2, User } from "lucide-react";
 
 export default function Tasks() {
   const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   const fetchTasks = async () => {
     try {

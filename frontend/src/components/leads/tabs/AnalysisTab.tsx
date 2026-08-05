@@ -3,7 +3,7 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+
 import { Play, CheckCircle2, AlertCircle, Loader2, Sparkles } from "lucide-react";
 
 interface AnalysisProgress {

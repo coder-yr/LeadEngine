@@ -11,7 +11,7 @@ import {
   DragStartEvent,
   DragEndEvent,
 } from "@dnd-kit/core";
-import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { BoardColumn } from "@/components/pipeline/BoardColumn";
 import { BoardCard } from "@/components/pipeline/BoardCard";
 import { Button } from "@/components/ui/button";
