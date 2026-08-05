@@ -13,7 +13,7 @@ export function LeadWorkspace() {
     const fetchLeads = async () => {
       try {
         setLoading(true);
-        const res = await axios.get("http://localhost:3000/api/companies");
+        const res = await axios.get(`${import.meta.env.VITE_API_URL}/companies`);
         
         // Map companies to the expected Lead structure
         const mappedLeads = res.data.map((dbCompany: any) => {
@@ -86,3 +86,4 @@ export function LeadWorkspace() {
     </div>
   );
 }
+

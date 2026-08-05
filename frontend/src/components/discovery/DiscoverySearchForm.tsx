@@ -56,7 +56,7 @@ export function DiscoverySearchForm({ onJobStarted }: DiscoverySearchFormProps) 
 
     setIsLoading(true);
     try {
-      await axios.post("http://localhost:3000/api/discovery/search", {
+      await axios.post(`${import.meta.env.VITE_API_URL}/discovery/search`, {
         keyword: keyword.trim(),
         city: city.trim(),
         sources,
@@ -207,3 +207,4 @@ export function DiscoverySearchForm({ onJobStarted }: DiscoverySearchFormProps) 
     </Card>
   );
 }
+

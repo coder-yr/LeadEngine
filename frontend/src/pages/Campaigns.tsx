@@ -13,7 +13,7 @@ export default function Campaigns() {
   const fetchCampaigns = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://localhost:3000/api/campaigns");
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/campaigns`);
       setCampaigns(res.data);
     } catch (error) {
       console.error("Failed to fetch campaigns", error);
@@ -93,7 +93,7 @@ export default function Campaigns() {
                     </div>
                     <Button variant="outline" size="sm" onClick={async () => {
                       try {
-                        const res = await axios.get(`http://localhost:3000/api/contacts/company/${campaign.company_id}`);
+                        const res = await axios.get(`${import.meta.env.VITE_API_URL}/contacts/company/${campaign.company_id}`);
                         const contacts = res.data;
                         if (!contacts || contacts.length === 0) {
                           alert("No contacts found for this company to enroll.");
@@ -105,7 +105,7 @@ export default function Campaigns() {
                           company_id: campaign.company_id
                         }));
 
-                        await axios.post(`http://localhost:3000/api/campaigns/${campaign.id}/enroll`, {
+                        await axios.post(`${import.meta.env.VITE_API_URL}/campaigns/${campaign.id}/enroll`, {
                           contacts: enrollments
                         });
                         
@@ -137,3 +137,4 @@ export default function Campaigns() {
     </div>
   );
 }
+

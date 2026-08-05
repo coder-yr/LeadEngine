@@ -21,7 +21,7 @@ export function CreateTaskDialog({ onTaskCreated }: { onTaskCreated: () => void 
 
   useEffect(() => {
     if (open) {
-      axios.get("http://localhost:3000/api/companies").then((res) => {
+      axios.get(`${import.meta.env.VITE_API_URL}/companies`).then((res) => {
         setCompanies(res.data);
       });
     }
@@ -33,7 +33,7 @@ export function CreateTaskDialog({ onTaskCreated }: { onTaskCreated: () => void 
 
     setLoading(true);
     try {
-      await axios.post("http://localhost:3000/api/tasks", {
+      await axios.post(`${import.meta.env.VITE_API_URL}/tasks`, {
         title,
         type,
         company_id: companyId,
@@ -119,3 +119,4 @@ export function CreateTaskDialog({ onTaskCreated }: { onTaskCreated: () => void 
     </Dialog>
   );
 }
+

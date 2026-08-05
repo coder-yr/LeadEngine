@@ -42,7 +42,7 @@ export function DiscoveryJobsTable({ jobs, onSelectJob, onRefresh }: DiscoveryJo
     if (!confirm("Are you sure you want to delete this discovery job?")) return;
     
     try {
-      await axios.delete(`http://localhost:3000/api/discovery/jobs/${id}`);
+      await axios.delete(`${import.meta.env.VITE_API_URL}/discovery/jobs/${id}`);
       onRefresh();
     } catch (error) {
       alert("Failed to delete");
@@ -51,7 +51,7 @@ export function DiscoveryJobsTable({ jobs, onSelectJob, onRefresh }: DiscoveryJo
 
   const handleExport = (id: string, format: 'csv' | 'xlsx', e: React.MouseEvent) => {
     e.stopPropagation();
-    window.open(`http://localhost:3000/api/discovery/export/${id}${format === 'xlsx' ? '/xlsx' : ''}`, '_blank');
+    window.open(`${import.meta.env.VITE_API_URL}/discovery/export/${id}${format === `xlsx' ? '/xlsx' : ''}`, '_blank');
   };
 
   if (jobs.length === 0) {
@@ -141,3 +141,4 @@ export function DiscoveryJobsTable({ jobs, onSelectJob, onRefresh }: DiscoveryJo
     </div>
   );
 }
+

@@ -13,7 +13,7 @@ export default function Tasks() {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://localhost:3000/api/tasks");
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/tasks`);
       setTasks(res.data);
     } catch (error) {
       console.error("Failed to fetch tasks", error);
@@ -33,7 +33,7 @@ export default function Tasks() {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
 
     try {
-      await axios.patch(`http://localhost:3000/api/tasks/${taskId}/status`, {
+      await axios.patch(`${import.meta.env.VITE_API_URL}/tasks/${taskId}/status`, {
         status: newStatus
       });
     } catch (error) {
@@ -156,3 +156,4 @@ export default function Tasks() {
     </div>
   );
 }
+

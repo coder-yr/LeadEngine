@@ -25,7 +25,7 @@ export function AnalysisTab({ company, onAnalysisComplete }: { company: any, onA
     // Only connect SSE if we are running analysis
     if (status !== 'ANALYSIS_RUNNING') return;
 
-    const eventSource = new EventSource(`http://localhost:3000/api/analysis/${company.id}/stream`);
+    const eventSource = new EventSource(`${import.meta.env.VITE_API_URL}/analysis/${company.id}/stream`);
 
     eventSource.onmessage = (event) => {
       try {
@@ -60,7 +60,7 @@ export function AnalysisTab({ company, onAnalysisComplete }: { company: any, onA
   const startAnalysis = async () => {
     try {
       setLoading(true);
-      await axios.post(`http://localhost:3000/api/analysis/${company.id}`);
+      await axios.post(`${import.meta.env.VITE_API_URL}/analysis/${company.id}`);
       setStatus('ANALYSIS_RUNNING');
       setProgressData({ stage: 'INIT', status: 'RUNNING', progress: 5, message: 'Starting analysis pipeline...' });
     } catch (err) {
@@ -191,3 +191,4 @@ export function AnalysisTab({ company, onAnalysisComplete }: { company: any, onA
     </div>
   );
 }
+

@@ -35,7 +35,7 @@ export default function Pipeline() {
   const fetchCompanies = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://localhost:3000/api/companies");
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/companies`);
       setCompanies(res.data);
     } catch (error) {
       console.error("Failed to fetch companies", error);
@@ -99,7 +99,7 @@ export default function Pipeline() {
 
       // Backend update
       try {
-        await axios.patch(`http://localhost:3000/api/companies/${activeCompanyId}/stage`, {
+        await axios.patch(`${import.meta.env.VITE_API_URL}/companies/${activeCompanyId}/stage`, {
           stage: targetStage,
         });
       } catch (error) {
@@ -162,3 +162,4 @@ export default function Pipeline() {
     </div>
   );
 }
+

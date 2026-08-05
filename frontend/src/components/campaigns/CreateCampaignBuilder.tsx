@@ -24,7 +24,7 @@ export function CreateCampaignBuilder({ onCampaignCreated }: { onCampaignCreated
 
   useEffect(() => {
     if (open) {
-      axios.get("http://localhost:3000/api/companies").then((res) => {
+      axios.get(`${import.meta.env.VITE_API_URL}/companies`).then((res) => {
 
         if (res.data.length > 0) setCompanyId(res.data[0].id);
       });
@@ -62,7 +62,7 @@ export function CreateCampaignBuilder({ onCampaignCreated }: { onCampaignCreated
 
     setLoading(true);
     try {
-      await axios.post("http://localhost:3000/api/campaigns", {
+      await axios.post(`${import.meta.env.VITE_API_URL}/campaigns`, {
         name,
         campaign_type: type,
         company_id: companyId,
@@ -195,3 +195,4 @@ export function CreateCampaignBuilder({ onCampaignCreated }: { onCampaignCreated
     </Dialog>
   );
 }
+

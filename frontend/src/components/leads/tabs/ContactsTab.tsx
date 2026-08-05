@@ -18,7 +18,7 @@ export function ContactsTab({ company }: ContactsTabProps) {
     const fetchContacts = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`http://localhost:3000/api/contacts/company/${company.id}`);
+        const res = await axios.get(`${import.meta.env.VITE_API_URL}/contacts/company/${company.id}`);
         setContacts(res.data);
       } catch (error) {
         console.error("Failed to fetch contacts", error);
@@ -103,3 +103,4 @@ export function ContactsTab({ company }: ContactsTabProps) {
     </div>
   )
 }
+

@@ -38,7 +38,7 @@ export default function CompanyDetails() {
     if (!id) return;
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:3000/api/companies/${id}`);
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/companies/${id}`);
       const dbCompany = res.data;
       const aiInsights = dbCompany.company_ai_insights || {};
       
@@ -271,3 +271,4 @@ export default function CompanyDetails() {
     </div>
   )
 }
+

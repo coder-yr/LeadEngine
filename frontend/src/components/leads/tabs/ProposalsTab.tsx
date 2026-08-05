@@ -18,7 +18,7 @@ export function ProposalsTab({ companyId }: { companyId: string }) {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:3000/api/proposals/${companyId}`);
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/proposals/${companyId}`);
       setProposals(res.data);
     } catch (error) {
       console.error("Failed to fetch proposals", error);
@@ -34,7 +34,7 @@ export function ProposalsTab({ companyId }: { companyId: string }) {
   const handleGenerate = async () => {
     try {
       setGenerating(true);
-      await axios.post(`http://localhost:3000/api/proposals/${companyId}/generate`);
+      await axios.post(`${import.meta.env.VITE_API_URL}/proposals/${companyId}/generate`);
       await fetchProposals();
     } catch (error) {
       console.error("Failed to generate proposal", error);
@@ -120,3 +120,4 @@ export function ProposalsTab({ companyId }: { companyId: string }) {
     </div>
   );
 }
+

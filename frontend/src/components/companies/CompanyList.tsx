@@ -18,7 +18,7 @@ export function CompanyList() {
     const fetchCompanies = async () => {
       try {
         setLoading(true);
-        const res = await axios.get("http://localhost:3000/api/companies");
+        const res = await axios.get(`${import.meta.env.VITE_API_URL}/companies`);
         
         // Map backend DB objects to frontend Company schema
         const mappedCompanies = res.data.map((dbCompany: any) => {
@@ -69,7 +69,7 @@ export function CompanyList() {
     if (selectedIds.size === 0) return;
     try {
       setLoading(true);
-      await axios.post("http://localhost:3000/api/analysis/bulk", {
+      await axios.post(`${import.meta.env.VITE_API_URL}/analysis/bulk`, {
         companyIds: Array.from(selectedIds)
       });
       setSelectedIds(new Set());
@@ -89,7 +89,7 @@ export function CompanyList() {
     }
 
     try {
-      const res = await axios.delete(`http://localhost:3000/api/companies/${companyId}`);
+      const res = await axios.delete(`${import.meta.env.VITE_API_URL}/companies/${companyId}`);
       if (res.data.success) {
         setCompanies(prev => prev.filter(c => c.id !== companyId));
         
@@ -193,3 +193,4 @@ export function CompanyList() {
     </div>
   );
 }
+

@@ -13,7 +13,7 @@ export default function Dashboard() {
     const fetchAnalytics = async () => {
       try {
         setLoading(true);
-        const res = await axios.get("http://localhost:3000/api/analytics/dashboard");
+        const res = await axios.get(`${import.meta.env.VITE_API_URL}/analytics/dashboard`);
         setData(res.data);
       } catch (error) {
         console.error("Failed to fetch analytics", error);
@@ -168,3 +168,4 @@ export default function Dashboard() {
     </div>
   )
 }
+
