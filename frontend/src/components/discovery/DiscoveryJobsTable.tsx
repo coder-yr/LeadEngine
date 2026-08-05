@@ -51,7 +51,7 @@ export function DiscoveryJobsTable({ jobs, onSelectJob, onRefresh }: DiscoveryJo
 
   const handleExport = (id: string, format: 'csv' | 'xlsx', e: React.MouseEvent) => {
     e.stopPropagation();
-    window.open(`${import.meta.env.VITE_API_URL}/discovery/export/${id}${format === `xlsx' ? '/xlsx' : ''}`, '_blank');
+    window.open(`${import.meta.env.VITE_API_URL}/discovery/export/${id}${format === 'xlsx' ? '/xlsx' : ''}`, '_blank');
   };
 
   if (jobs.length === 0) {
