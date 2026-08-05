@@ -1,4 +1,5 @@
 import 'dotenv/config';
+console.log('Bootstrapping backend...');
 import express, { Express, Request, Response } from 'express';
 
 process.on('uncaughtException', (err) => {
@@ -34,7 +35,7 @@ import('./orchestration/QueueWorkers.js').catch(err => {
 });
 
 const app: Express = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Middleware
 app.use(cors());
@@ -78,8 +79,8 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/analysis', analysisRoutes);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
 
 export default app;
