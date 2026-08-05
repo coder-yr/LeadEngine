@@ -1,7 +1,7 @@
-import { LlmGateway } from './LlmGateway';
-import { ModelRegistry } from './ModelRegistry';
-import { TelemetryService } from './TelemetryService';
-import { WebsiteDocument } from './WebsiteIntelligenceService';
+import { LlmGateway } from './LlmGateway.js';
+import { ModelRegistry } from './ModelRegistry.js';
+import { TelemetryService } from './TelemetryService.js';
+import { WebsiteDocument } from './WebsiteIntelligenceService.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -291,3 +291,4 @@ export class QuickAuditService {
         }
     }
 }
+

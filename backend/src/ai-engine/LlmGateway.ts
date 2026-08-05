@@ -1,5 +1,5 @@
-import { AiConfig } from './AiConfig';
-import { TelemetryService } from './TelemetryService';
+import { AiConfig } from './AiConfig.js';
+import { TelemetryService } from './TelemetryService.js';
 
 export interface LlmGenerateOptions {
     format?: 'json' | string;
@@ -88,3 +88,4 @@ export class LlmGateway {
         }
     }
 }
+

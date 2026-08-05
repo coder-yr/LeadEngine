@@ -1,7 +1,7 @@
-import { LlmGateway } from './LlmGateway';
-import { ModelRegistry } from './ModelRegistry';
-import { TelemetryService } from './TelemetryService';
-import { LeadIntelligenceResult } from './LeadIntelligenceService';
+import { LlmGateway } from './LlmGateway.js';
+import { ModelRegistry } from './ModelRegistry.js';
+import { TelemetryService } from './TelemetryService.js';
+import { LeadIntelligenceResult } from './LeadIntelligenceService.js';
 
 export interface OutreachGenerationParams {
     contactName: string;
@@ -147,3 +147,4 @@ export class OutreachIntelligenceService {
         };
     }
 }
+

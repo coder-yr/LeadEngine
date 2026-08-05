@@ -1,6 +1,6 @@
-import { ClassificationService } from './ClassificationService';
-import { TelemetryService } from './TelemetryService';
-import { WebsiteDocument } from './WebsiteIntelligenceService';
+import { ClassificationService } from './ClassificationService.js';
+import { TelemetryService } from './TelemetryService.js';
+import { WebsiteDocument } from './WebsiteIntelligenceService.js';
 
 // ─── Industry Taxonomy ────────────────────────────────────────────────────────
 // 3-tier taxonomy: Primary → Category → Sub-category
@@ -359,3 +359,4 @@ export class CompanyIntelligenceService {
         return [...new Set(rawServices)];
     }
 }
+

@@ -1,16 +1,16 @@
-import { LlmGateway } from './LlmGateway';
-import { NerService } from './NerService';
-import { ClassificationService } from './ClassificationService';
-import { EmbeddingGateway } from './EmbeddingGateway';
-import { KnowledgeEngineService } from './EmbeddingService';
-import { WebsiteIntelligenceService } from './WebsiteIntelligenceService';
-import { ContactIntelligenceService } from './ContactIntelligenceService';
-import { CompanyIntelligenceService } from './CompanyIntelligenceService';
-import { QuickAuditService } from './QuickAuditService';
-import { LeadIntelligenceService } from './LeadIntelligenceService';
-import { OutreachIntelligenceService } from './OutreachIntelligenceService';
-import { ModelRegistry } from './ModelRegistry';
-import { PromptRegistry } from './PromptRegistry';
+import { LlmGateway } from './LlmGateway.js';
+import { NerService } from './NerService.js';
+import { ClassificationService } from './ClassificationService.js';
+import { EmbeddingGateway } from './EmbeddingGateway.js';
+import { KnowledgeEngineService } from './EmbeddingService.js';
+import { WebsiteIntelligenceService } from './WebsiteIntelligenceService.js';
+import { ContactIntelligenceService } from './ContactIntelligenceService.js';
+import { CompanyIntelligenceService } from './CompanyIntelligenceService.js';
+import { QuickAuditService } from './QuickAuditService.js';
+import { LeadIntelligenceService } from './LeadIntelligenceService.js';
+import { OutreachIntelligenceService } from './OutreachIntelligenceService.js';
+import { ModelRegistry } from './ModelRegistry.js';
+import { PromptRegistry } from './PromptRegistry.js';
 
 /**
  * The central facade for LeadEngine's AI Platform.
@@ -61,3 +61,4 @@ export class AiGateway {
     static get Models() { return ModelRegistry; }
     static get Prompts() { return PromptRegistry; }
 }
+

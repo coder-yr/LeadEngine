@@ -14,3 +14,4 @@ export const AiConfig = {
         enabled: process.env.AI_TELEMETRY_ENABLED === 'true' || true,
     }
 };
+

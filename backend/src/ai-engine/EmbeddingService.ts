@@ -1,8 +1,8 @@
 import Redis from 'ioredis';
-import { redisConfig } from '../config/redis';
-import { EmbeddingGateway, EmbeddingVector } from './EmbeddingGateway';
-import { TelemetryService } from './TelemetryService';
-import { WebsiteDocument } from './WebsiteIntelligenceService';
+import { redisConfig } from '../config/redis.js';
+import { EmbeddingGateway, EmbeddingVector } from './EmbeddingGateway.js';
+import { TelemetryService } from './TelemetryService.js';
+import { WebsiteDocument } from './WebsiteIntelligenceService.js';
 
 // ─── Redis TTL ────────────────────────────────────────────────────────────────
 
@@ -241,3 +241,4 @@ export class KnowledgeEngineService {
         await KnowledgeEngineService.redis.srem('embedding:company_index', companyId);
     }
 }
+

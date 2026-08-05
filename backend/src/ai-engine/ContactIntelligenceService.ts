@@ -1,6 +1,6 @@
 import { LocalAiGateway } from './LocalAiGateway.js';
-import { TelemetryService } from './TelemetryService';
-import { WebsiteDocument } from './WebsiteIntelligenceService';
+import { TelemetryService } from './TelemetryService.js';
+import { WebsiteDocument } from './WebsiteIntelligenceService.js';
 
 // ─── Regex Patterns ─────────────────────────────────────────────────────────
 
@@ -394,3 +394,4 @@ export class ContactIntelligenceService {
         });
     }
 }
+

@@ -1,8 +1,8 @@
-import { TelemetryService } from './TelemetryService';
-import { WebsiteDocument } from './WebsiteIntelligenceService';
-import { QuickAuditResult } from './QuickAuditService';
-import { CompanyIntelligenceResult } from './CompanyIntelligenceService';
-import { ContactIntelligenceResult } from './ContactIntelligenceService';
+import { TelemetryService } from './TelemetryService.js';
+import { WebsiteDocument } from './WebsiteIntelligenceService.js';
+import { QuickAuditResult } from './QuickAuditService.js';
+import { CompanyIntelligenceResult } from './CompanyIntelligenceService.js';
+import { ContactIntelligenceResult } from './ContactIntelligenceService.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -406,3 +406,4 @@ export class LeadIntelligenceService {
         };
     }
 }
+

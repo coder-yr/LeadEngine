@@ -6,3 +6,4 @@ export const PromptRegistry = {
     deepAnalysis: `Perform a deep strategic analysis on the following company. Generate: Buying Signals, SWOT, Business Gaps, Marketing Gaps, Technology Gaps, Recommendations.`,
     outreach: `Draft a highly personalized cold outreach email based on these business signals.`,
 };
+

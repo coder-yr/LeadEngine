@@ -3,8 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import Redis from 'ioredis';
-import { redisConfig } from '../config/redis';
-import { TelemetryService } from './TelemetryService';
+import { redisConfig } from '../config/redis.js';
+import { TelemetryService } from './TelemetryService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -135,3 +135,4 @@ export class WebsiteIntelligenceService {
         });
     }
 }
+

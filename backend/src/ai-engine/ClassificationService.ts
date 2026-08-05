@@ -1,7 +1,7 @@
 import { LocalAiGateway } from './LocalAiGateway.js';
 import { LlmGateway } from './LlmGateway.js';
 import { ModelRegistry } from './ModelRegistry.js';
-import { TelemetryService } from './TelemetryService';
+import { TelemetryService } from './TelemetryService.js';
 
 export interface ZeroShotResult {
     sequence: string;
@@ -107,3 +107,4 @@ Return ONLY the matching label name. Do NOT write any introduction or explanatio
         }
     }
 }
+

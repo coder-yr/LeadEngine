@@ -1,5 +1,5 @@
 import { LocalAiGateway } from './LocalAiGateway.js';
-import { TelemetryService } from './TelemetryService';
+import { TelemetryService } from './TelemetryService.js';
 
 export type EmbeddingVector = number[];
 
@@ -62,3 +62,4 @@ export class EmbeddingGateway {
         return dot / denominator;
     }
 }
+

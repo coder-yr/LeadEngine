@@ -11,3 +11,4 @@ export const ModelRegistry = {
 };
 
 export type ModelTaskType = keyof typeof ModelRegistry;
+

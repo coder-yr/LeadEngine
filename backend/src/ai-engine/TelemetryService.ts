@@ -1,7 +1,7 @@
 /**
  * Tracks AI request performance, latency, and usage.
  */
-import { AiConfig } from './AiConfig';
+import { AiConfig } from './AiConfig.js';
 
 export class TelemetryService {
     static trackEvent(event: string, meta: any = {}) {
@@ -17,3 +17,4 @@ export class TelemetryService {
         console.error(`[Telemetry Error] ${event}`, error);
     }
 }
+
