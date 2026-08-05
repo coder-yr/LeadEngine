@@ -71,7 +71,7 @@ export const analysisWorker = new Worker(
       await broadcast('LEAD_SCORING', 75, 'RUNNING', 'Calculating lead score...');
       const leadScoringService = new LeadScoringService();
       const scoreResult = await leadScoringService.scoreCompany(companyId);
-      const finalScore = scoreResult.totalScore || 85;
+      const finalScore = scoreResult.lead_score || 85;
 
       // 7. Recommendations & Proposal Context
       await broadcast('RECOMMENDATIONS', 85, 'RUNNING', 'Generating recommendations and proposal context...');

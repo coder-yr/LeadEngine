@@ -33,8 +33,7 @@ export const websiteIntelligenceWorker = new Worker(
         supabase,
         companyId,
         traceId,
-        success: false,
-        errorMessage: 'No domain found',
+        metadata: { success: false, errorMessage: 'No domain found' },
       });
       return { skipped: true, reason: 'No domain found' };
     }
@@ -80,8 +79,7 @@ export const websiteIntelligenceWorker = new Worker(
         supabase,
         companyId,
         traceId,
-        success: false,
-        errorMessage: result.error,
+        metadata: { success: false, errorMessage: result.error },
       });
       return result;
     }
@@ -114,7 +112,7 @@ export const websiteIntelligenceWorker = new Worker(
       supabase,
       companyId,
       traceId,
-      success: true,
+      metadata: { success: true },
     });
 
     return result;

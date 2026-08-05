@@ -76,7 +76,7 @@ export const identityResolutionWorker = new Worker(
         supabase,
         companyId,
         traceId,
-        success: true,
+        metadata: { success: true },
       });
     }
 

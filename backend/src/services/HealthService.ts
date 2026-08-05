@@ -121,7 +121,7 @@ export class HealthService {
     const start = Date.now();
     try {
       // Ping via BullMQ's underlying Redis connection
-      await intelligenceQueue.client.then((c) => c.ping());
+      await intelligenceQueue.client.then((c: any) => c.ping());
       return { status: 'ok', latency_ms: Date.now() - start };
     } catch {
       return { status: 'down', latency_ms: Date.now() - start };
