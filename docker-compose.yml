@@ -112,8 +112,8 @@ services:
   # Python Workers (for crawling, extraction, etc.)
   workers:
     build:
-      context: ./workers
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: workers/Dockerfile
     container_name: leadengine-workers
     environment:
       REDIS_HOST: redis
