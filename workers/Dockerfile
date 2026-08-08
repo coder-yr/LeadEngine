@@ -20,5 +20,8 @@ RUN playwright install --with-deps chromium
 # Copy source code
 COPY workers/ .
 
+# Set PYTHONPATH to include src directory so imports work
+ENV PYTHONPATH=/app/src
+
 # Run worker
-CMD ["python", "-m", "src.worker"]
+CMD ["python", "src/worker.py"]
