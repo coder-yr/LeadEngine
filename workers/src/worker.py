@@ -13,9 +13,18 @@ from tasks.contact_task import ContactTask
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(name)s] %(levelname)s: %(message)s')
 logger = logging.getLogger("worker")
 
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
-REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", "")
+import urllib.parse
+
+REDIS_URL = os.environ.get("REDIS_URL")
+if REDIS_URL:
+    url = urllib.parse.urlparse(REDIS_URL)
+    REDIS_HOST = url.hostname
+    REDIS_PORT = url.port or 6379
+    REDIS_PASSWORD = url.password or ""
+else:
+    REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+    REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+    REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", "")
 
 redis_opts = {
     "host": REDIS_HOST,
