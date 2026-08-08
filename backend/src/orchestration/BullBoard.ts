@@ -11,7 +11,11 @@ import {
   failedAuditQueue,
   failedInsightsQueue,
   failedBuyingSignalsQueue,
-  failedOutreachQueue
+  failedOutreachQueue,
+  discoveryExecuteQueue,
+  websiteExecuteQueue,
+  contactExecuteQueue,
+  analysisExecuteQueue
 } from './Queues.js';
 
 export const bullBoardAdapter = new ExpressAdapter();
@@ -29,6 +33,10 @@ createBullBoard({
     new BullMQAdapter(failedBuyingSignalsQueue),
     new BullMQAdapter(failedOutreachQueue),
     new BullMQAdapter(failedInsightsQueue),
+    new BullMQAdapter(discoveryExecuteQueue),
+    new BullMQAdapter(websiteExecuteQueue),
+    new BullMQAdapter(contactExecuteQueue),
+    new BullMQAdapter(analysisExecuteQueue),
   ],
   serverAdapter: bullBoardAdapter,
 });

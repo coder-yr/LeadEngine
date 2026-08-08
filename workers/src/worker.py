@@ -17,12 +17,14 @@ import urllib.parse
 
 REDIS_URL = os.environ.get("REDIS_URL")
 if REDIS_URL:
+    # Pass the raw URL directly to let redis-py handle all parsing
+    # (including passwords, ssl, and db indexes) perfectly!
+    redis_opts = REDIS_URL
+    
+    # Just for logging purposes
     url = urllib.parse.urlparse(REDIS_URL)
     REDIS_HOST = url.hostname
     REDIS_PORT = url.port or 6379
-    REDIS_PASSWORD = url.password or ""
-    REDIS_USERNAME = url.username or ""
-    REDIS_SSL = url.scheme == "rediss"
 else:
     REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
     REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
@@ -30,17 +32,17 @@ else:
     REDIS_USERNAME = os.environ.get("REDIS_USERNAME", "")
     REDIS_SSL = os.environ.get("REDIS_SSL", "false").lower() == "true"
 
-redis_opts = {
-    "host": REDIS_HOST,
-    "port": REDIS_PORT,
-    "password": REDIS_PASSWORD
-}
-if REDIS_USERNAME:
-    redis_opts["username"] = REDIS_USERNAME
-if REDIS_SSL:
-    redis_opts["ssl"] = True
-    import ssl
-    redis_opts["ssl_cert_reqs"] = ssl.CERT_NONE
+    redis_opts = {
+        "host": REDIS_HOST,
+        "port": REDIS_PORT,
+        "password": REDIS_PASSWORD
+    }
+    if REDIS_USERNAME:
+        redis_opts["username"] = REDIS_USERNAME
+    if REDIS_SSL:
+        redis_opts["ssl"] = True
+        import ssl
+        redis_opts["ssl_cert_reqs"] = ssl.CERT_NONE
 
 # Task Registry
 TASKS: Dict[str, PythonTask] = {
