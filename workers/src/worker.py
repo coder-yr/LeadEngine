@@ -1,33 +1,100 @@
-"""
-LeadEngine Python Workers
-
-This is the main entry point for the Python worker processes.
-
-TODO (Phase 1):
-- Setup Redis connection
-- Setup Supabase connection
-- Create task queue
-- Implement event listeners
-- Create logging
-- Setup worker pool
-"""
-
 import asyncio
 import logging
+import os
+import traceback
+from typing import Dict
+from bullmq import Worker, Queue, Job
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from tasks.base_task import PythonTask
+from tasks.discovery_task import DiscoveryTask
+from tasks.website_task import WebsiteTask
+from tasks.contact_task import ContactTask
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(name)s] %(levelname)s: %(message)s')
+logger = logging.getLogger("worker")
+
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", "")
+
+redis_opts = {
+    "host": REDIS_HOST,
+    "port": REDIS_PORT,
+    "password": REDIS_PASSWORD,
+    "decode_responses": True
+}
+
+# Task Registry
+TASKS: Dict[str, PythonTask] = {
+    "discovery.execute.queue": DiscoveryTask(),
+    "website.execute.queue": WebsiteTask(),
+    "contact.execute.queue": ContactTask(),
+}
+
+async def process_job(job: Job, job_token: str):
+    """
+    Generic job processor that delegates to the appropriate Task handler based on the queue name.
+    """
+    queue_name = job.queue_name
+    handler = TASKS.get(queue_name)
+    
+    if not handler:
+        logger.error(f"No handler registered for queue {queue_name}")
+        raise ValueError(f"No handler registered for queue {queue_name}")
+        
+    logger.info(f"Processing job {job.id} from {queue_name}")
+    
+    try:
+        # 1. Execute task
+        result = await handler.execute(job.data, job)
+        
+        # 2. Enqueue to completion queue (handled by Node orchestrator)
+        completed_queue_name = queue_name.replace(".execute.queue", ".completed.queue")
+        
+        # Push correlation IDs downstream
+        payload = {
+            "pipelineId": job.data.get("pipelineId"),
+            "companyId": job.data.get("companyId"),
+            "traceId": job.data.get("traceId"),
+            "jobId": job.id,
+            "payload": result
+        }
+        
+        logger.info(f"Task {queue_name} completed. Enqueueing to {completed_queue_name}")
+        completed_queue = Queue(completed_queue_name, {"connection": redis_opts})
+        await completed_queue.add("completed", payload)
+        await completed_queue.close()
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Job {job.id} failed: {e}\n{traceback.format_exc()}")
+        raise e
 
 async def main():
-    """Start the worker process"""
-    logger.info("LeadEngine Workers starting...")
-    logger.info("Phase 0: Bootstrap - Ready for Phase 1")
+    logger.info("Starting Python Workers...")
+    logger.info(f"Connecting to Redis at {REDIS_HOST}:{REDIS_PORT}")
     
-    # TODO: Implement worker initialization
-    await asyncio.sleep(1)
-    logger.info("Workers ready")
-
+    workers = []
+    
+    # Create one worker per execute queue
+    for queue_name in TASKS.keys():
+        worker = Worker(
+            queue_name,
+            process_job,
+            {"connection": redis_opts, "concurrency": 2}
+        )
+        workers.append(worker)
+        logger.info(f"Listening on {queue_name}")
+        
+    # Keep alive
+    try:
+        await asyncio.Event().wait()
+    except asyncio.exceptions.CancelledError:
+        pass
+    finally:
+        for worker in workers:
+            await worker.close()
 
 if __name__ == "__main__":
     asyncio.run(main())

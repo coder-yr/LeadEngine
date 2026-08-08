@@ -13,25 +13,56 @@ const sharedQueueOptions: Omit<QueueOptions, 'connection'> = {
   },
 };
 
-// Main Queues
-export const discoveryQueue = new Queue('discovery-queue', {
+// ----------------------------------------------------------------------
+// PYTHON EXECUTION QUEUES (Consumed by Python Worker, Enqueued by Node)
+// ----------------------------------------------------------------------
+export const discoveryExecuteQueue = new Queue('discovery.execute.queue', {
   connection: redisConfig,
   ...sharedQueueOptions,
 });
 
-export const intelligenceQueue = new Queue('intelligence-queue', {
+export const websiteExecuteQueue = new Queue('website.execute.queue', {
   connection: redisConfig,
   ...sharedQueueOptions,
 });
 
-// V2: Identity Resolution
+export const contactExecuteQueue = new Queue('contact.execute.queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const analysisExecuteQueue = new Queue('analysis.execute.queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+// ----------------------------------------------------------------------
+// NODE COMPLETION QUEUES (Consumed by Node Orchestrator, Enqueued by Python Worker)
+// ----------------------------------------------------------------------
+export const discoveryCompletedQueue = new Queue('discovery.completed.queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const websiteCompletedQueue = new Queue('website.completed.queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const contactCompletedQueue = new Queue('contact.completed.queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const analysisCompletedQueue = new Queue('analysis.completed.queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+// ----------------------------------------------------------------------
+// NODE ORCHESTRATION QUEUES (Consumed by Node, Enqueued by Node)
+// ----------------------------------------------------------------------
 export const identityResolutionQueue = new Queue('identity-resolution-queue', {
-  connection: redisConfig,
-  ...sharedQueueOptions,
-});
-
-// V2: Website Intelligence (6-stage crawl pipeline)
-export const websiteIntelligenceQueue = new Queue('website-intelligence-queue', {
   connection: redisConfig,
   ...sharedQueueOptions,
 });
@@ -47,11 +78,6 @@ export const aiInsightsQueue = new Queue('ai-insights-queue', {
 });
 
 export const buyingSignalsQueue = new Queue('buying-signals-queue', {
-  connection: redisConfig,
-  ...sharedQueueOptions,
-});
-
-export const contactDiscoveryQueue = new Queue('contact-discovery-queue', {
   connection: redisConfig,
   ...sharedQueueOptions,
 });

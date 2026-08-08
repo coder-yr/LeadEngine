@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import { spawn } from 'child_process';
+
 import path from 'path';
 import { redisConfig } from '../../config/redis.js';
 import { supabase } from '../../config/supabase.js';

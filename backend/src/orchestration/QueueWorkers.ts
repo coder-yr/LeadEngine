@@ -29,7 +29,7 @@ import { AiInsightsRepository } from '../workers/ai-insights/AiInsightsRepositor
 import { BuyingSignalsService } from '../workers/buying-signals/BuyingSignalsService.js';
 import { outreachWorker } from '../workers/outreach/OutreachEngineWorker.js';
 import { identityResolutionWorker } from '../workers/intelligence/IdentityResolutionWorker.js';
-import { websiteIntelligenceWorker } from '../workers/intelligence/WebsiteIntelligenceWorker.js';
+import { websiteIntelligenceWorker, websiteCompletedWorker } from '../workers/intelligence/WebsiteIntelligenceWorker.js';
 import { ContactDiscoveryService } from '../services/ContactDiscoveryService.js';
 import { LeadScoringService } from '../services/LeadScoringService.js';
 
@@ -38,7 +38,7 @@ import { analysisWorker } from './AnalysisWorker.js';
 
 // We import outreachWorker here to ensure it initializes and starts processing.
 // Export it if needed
-export { outreachWorker, identityResolutionWorker, websiteIntelligenceWorker, analysisWorker };
+export { outreachWorker, identityResolutionWorker, websiteIntelligenceWorker, websiteCompletedWorker, analysisWorker };
 
 // Worker Options
 const workerOptions = {
@@ -49,78 +49,36 @@ const workerOptions = {
   },
 };
 
-import { spawn } from 'child_process';
+
 import path from 'path';
 import { StageDispatcher } from './StageDispatcher.js';
 import { DiscoveryStage } from '../services/IdentityResolutionService.js';
 
-// 0. Discovery Worker (V2 Discovery entry point)
-export const discoveryWorker = new Worker(
-  'discovery-queue',
-  async (job: Job<{ keyword: string; city: string; sources?: string[]; max_results?: number; traceId: string }>) => {
-    const { keyword, city, sources, max_results, traceId } = job.data;
+import { discoveryCompletedQueue, failedDiscoveryQueue } from './Queues.js';
+import { DiscoveryService } from '../services/discovery.service.js';
+
+// 0. Discovery Completed Worker (Consumes from Python Worker)
+export const discoveryCompletedWorker = new Worker(
+  'discovery.completed.queue',
+  async (job: Job<{ pipelineId: string; companyId: string; traceId: string; jobId: string; payload: any }>) => {
+    const { pipelineId, traceId, jobId, payload } = job.data;
     const { logger } = createTraceLogger(traceId);
     
-    logger.info({ keyword, city }, 'Starting V2 discovery engine');
+    logger.info({ pipelineId, jobId }, 'Processing completed discovery job from Python');
     
-    if (!keyword || !city) {
-      throw new Error("Both 'keyword' and 'city' are required");
-    }
-
-    // Call Python discovery_runner.py
-    const pythonPath = process.env.PYTHON_PATH || path.resolve(process.cwd(), '../workers/venv/Scripts/python.exe');
-    const scriptPath = path.resolve(process.cwd(), '../workers/src/discovery_runner.py');
-
-    const discoveryOutput = await new Promise<any>((resolve, reject) => {
-      const py = spawn(pythonPath, [scriptPath]);
-      let output = '';
-      let errorOut = '';
-
-      py.stdout.on('data', (data) => { output += data.toString(); });
-      py.stderr.on('data', (data) => { errorOut += data.toString(); });
-
-      py.on('close', (code) => {
-        if (code !== 0) {
-          logger.error({ errorOut }, 'Discovery Python script failed');
-          return reject(new Error(`Python process exited with code ${code}`));
-        }
-        try {
-          resolve(JSON.parse(output));
-        } catch (e) {
-          reject(new Error(`Failed to parse Python output: ${e}`));
-        }
-      });
-
-      py.stdin.write(JSON.stringify({ 
-        keyword, 
-        city, 
-        sources: sources || ['google_maps', 'overpass', 'duckduckgo', 'google_dorks', 'website_search'],
-        max_results: max_results || 10 
-      }));
-      py.stdin.end();
-    });
-
-    if (discoveryOutput.status === 'error') {
-      throw new Error(discoveryOutput.error);
-    }
-
-    // Pass results to identity resolution
-    const { identityResolutionQueue } = await import('./Queues.js');
-    await identityResolutionQueue.add('resolve-identity', {
-      traceId,
-      stage: 'DISCOVERED',
-      discoveryOutput,
-    });
-
-    return discoveryOutput;
+    const discoveryService = new DiscoveryService();
+    await discoveryService.processDiscoveryResults(jobId, payload);
+    
+    // Identity resolution is triggered via OrchestratorService inside processDiscoveryResults for new companies.
+    return { status: 'processed' };
   },
   workerOptions
 );
 
-discoveryWorker.on('failed', async (job, err) => {
+discoveryCompletedWorker.on('failed', async (job, err) => {
   if (job && job.attemptsMade === job.opts.attempts) {
     const { logger } = createTraceLogger(job.data.traceId);
-    logger.error({ err, keyword: job.data.keyword }, 'Discovery job failed permanently. Moving to DLQ.');
+    logger.error({ err, pipelineId: job.data.pipelineId }, 'Discovery completion job failed permanently. Moving to DLQ.');
     await failedDiscoveryQueue.add('failed-discovery', job.data);
   }
 });
@@ -314,39 +272,25 @@ export const adaptiveEnrichmentWorker = new Worker(
         const keyword = company.name;
         const city = company.city || company.state_province || '';
         
-        const pythonPath = process.env.PYTHON_PATH || path.resolve(process.cwd(), '../workers/venv/Scripts/python.exe');
-        const scriptPath = path.resolve(process.cwd(), '../workers/src/discovery_runner.py');
-
         try {
-          const discoveryOutput = await new Promise<any>((resolve, reject) => {
-            const py = spawn(pythonPath, [scriptPath]);
-            let output = '';
-            let errorOut = '';
-            py.stdout.on('data', (data) => { output += data.toString(); });
-            py.stderr.on('data', (data) => { errorOut += data.toString(); });
-            py.on('close', (code) => {
-              if (code !== 0) return reject(new Error(`Python process exited with code ${code}`));
-              try { resolve(JSON.parse(output)); } catch (e) { reject(new Error(`Failed to parse Python output: ${e}`)); }
-            });
-            py.stdin.write(JSON.stringify({ keyword, city, sources: sourcesToRun, max_results: 5 }));
-            py.stdin.end();
+          const { discoveryExecuteQueue } = await import('./Queues.js');
+          
+          await discoveryExecuteQueue.add('run-discovery', {
+             pipelineId: leadIdentityId,
+             companyId: companyId,
+             traceId: traceId,
+             keyword: keyword,
+             city: city,
+             sources: sourcesToRun,
+             max_results: 5,
+             stage: 'ADAPTIVE_ENRICHMENT' // Pass the stage so the completion worker knows where it came from
           });
           
-          logger.info({ leadIdentityId, results: discoveryOutput.total_raw }, 'Adaptive enrichment completed');
-          
-          // Queue it back to identity resolution to merge the new records
-          const { identityResolutionQueue } = await import('./Queues.js');
-          await identityResolutionQueue.add('resolve-identity', {
-            companyId,
-            traceId,
-            stage: 'ADAPTIVE_ENRICHMENT', // Advance forward to next stage, do not rewind!
-            discoveryOutput,
-          });
-          
+          logger.info({ leadIdentityId }, 'Adaptive enrichment queued via Python worker');
           return { enrichmentQueued: true };
           
         } catch (err: any) {
-          logger.error({ err: err.message }, 'Adaptive enrichment failed');
+          logger.error({ err: err.message }, 'Adaptive enrichment failed to queue');
         }
       }
     }
@@ -370,27 +314,39 @@ adaptiveEnrichmentWorker.on('failed', async (job, err) => {
   }
 });
 
-// 5. Contact Discovery Worker
+import { contactCompletedQueue } from './Queues.js';
+
+// 5a. Contact Discovery Trigger Worker (Consumes Orchestrator Queue, Enqueues to Python)
 export const contactDiscoveryWorker = new Worker(
   'contact-discovery-queue',
   async (job: Job<{ leadIdentityId: string; companyId: string; traceId?: string; stage: DiscoveryStage }>) => {
     const { leadIdentityId, companyId, traceId, stage } = job.data;
     const { logger } = createTraceLogger(traceId || leadIdentityId);
     
-    logger.info({ companyId, leadIdentityId }, 'Starting contact discovery');
+    logger.info({ companyId, leadIdentityId }, 'Triggering contact discovery via Python worker');
     
-    const contactDiscoveryService = new ContactDiscoveryService();
-    const contactsFound = await contactDiscoveryService.discoverContacts(companyId);
-    
-    // Advance to next stage
-    await StageDispatcher.advance(leadIdentityId, stage, {
-      supabase,
-      companyId,
-      traceId,
-      metadata: { contactsFound }
-    });
-    
-    return { contactsFound };
+    const { data: company } = await supabase.from('companies').select('name, website_url').eq('id', companyId).maybeSingle();
+
+    if (company && company.website_url) {
+      const contactDiscoveryService = new ContactDiscoveryService();
+      await contactDiscoveryService.triggerContactDiscovery(
+         companyId,
+         company.name,
+         company.website_url,
+         leadIdentityId,
+         traceId
+      );
+      return { status: 'queued' };
+    } else {
+        logger.warn({ companyId }, 'Skipping contact discovery (no website)');
+        await StageDispatcher.advance(leadIdentityId, stage, {
+          supabase,
+          companyId,
+          traceId,
+          metadata: { skipped: true }
+        });
+        return { status: 'skipped' };
+    }
   },
   workerOptions
 );
@@ -398,8 +354,40 @@ export const contactDiscoveryWorker = new Worker(
 contactDiscoveryWorker.on('failed', async (job, err) => {
   if (job && job.attemptsMade === job.opts.attempts) {
     const { logger } = createTraceLogger(job.data.traceId || job.data.leadIdentityId);
-    logger.error({ err, companyId: job.data.companyId }, 'Contact discovery failed permanently. Moving to DLQ.');
+    logger.error({ err, companyId: job.data.companyId }, 'Contact discovery trigger failed permanently. Moving to DLQ.');
     await failedContactDiscoveryQueue.add('failed-contact-discovery', job.data);
+  }
+});
+
+// 5b. Contact Discovery Completed Worker (Consumes from Python)
+export const contactCompletedWorker = new Worker(
+  'contact.completed.queue',
+  async (job: Job<{ pipelineId: string; companyId: string; traceId: string; payload: any }>) => {
+     const { payload, companyId, pipelineId, traceId } = job.data;
+     const { logger } = createTraceLogger(traceId || pipelineId);
+     
+     logger.info({ pipelineId, companyId }, 'Processing completed contact discovery from Python');
+     
+     const contactDiscoveryService = new ContactDiscoveryService();
+     const contactsFound = await contactDiscoveryService.processContactDiscoveryResults(companyId, payload);
+     
+     // Advance to next stage
+     await StageDispatcher.advance(pipelineId, 'CONTACT_DISCOVERY' as any, {
+       supabase,
+       companyId,
+       traceId,
+       metadata: { contactsFound }
+     });
+     
+     return { contactsFound };
+  },
+  workerOptions
+);
+
+contactCompletedWorker.on('failed', async (job, err) => {
+  if (job && job.attemptsMade === job.opts.attempts) {
+    const { logger } = createTraceLogger(job.data.traceId || job.data.pipelineId);
+    logger.error({ err, companyId: job.data.companyId }, 'Contact discovery completed job failed permanently.');
   }
 });
 

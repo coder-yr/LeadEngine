@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase.js';
-import { spawn } from 'child_process';
+
 import path from 'path';
 import fs from 'fs';
 import { ContactRepository } from '../db/repositories/ContactRepository.js';
@@ -891,148 +891,174 @@ export class ContactDiscoveryService {
     };
   }
 
+import { contactExecuteQueue } from '../orchestration/Queues.js';
+
   /**
-   * Spawns the free_contact_discovery_v3.py Python script.
+   * Enqueues a Contact Discovery job to the Python worker.
    */
-  private scrapeWithFreeV3(companyName: string, website: string, metrics: any, timeoutMs: number = 300000, options: { quickAudit?: boolean } = {}): Promise<{contacts: any[], businessContacts: any[], socialProfiles: any[], contactPages: any[], metrics: any, exitCode: number | null, rawStdout: string, success?: boolean, error?: string}> {
-    return new Promise((resolve, reject) => {
-      const args = ['free_contact_discovery_v3.py', companyName, website];
-      if (options.quickAudit) {
-        args.push('--quick');
+  async triggerContactDiscovery(companyId: string, companyName: string, websiteUrl: string, pipelineId?: string, traceId?: string): Promise<string> {
+    const payload = {
+      pipelineId: pipelineId || companyId,
+      companyId: companyId,
+      traceId: traceId,
+      company_name: companyName,
+      website_url: websiteUrl,
+      quick: false
+    };
+    
+    const job = await contactExecuteQueue.add('run-contact-discovery', payload);
+    return job.id as string;
+  }
+  
+  /**
+   * Processes the structured Evidence Engine response from the Python worker.
+   * Called by the ContactCompletedWorker.
+   */
+  async processContactDiscoveryResults(companyId: string, pythonOutput: any): Promise<number> {
+     // Get company data including any contacts already extracted
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .select('*, discovery_results!discovery_results_company_id_fkey(*)')
+      .eq('id', companyId)
+      .single();
+
+    if (companyError || !company) {
+      console.warn(`ContactDiscovery: Company ${companyId} not found`);
+      return 0;
+    }
+    
+    const candidates: ContactCandidate[] = [];
+
+    // Extract contacts from discovery results raw_data
+    const discoveryResults = company.discovery_results || [];
+    for (const result of discoveryResults) {
+      const rawData = result.raw_data || {};
+      if (rawData['Contact Person']) {
+        const dmScore = this.scoreDecisionMaker(rawData['Designation']);
+        candidates.push({
+          name: rawData['Contact Person'],
+          phone: result.raw_phone || undefined,
+          email: result.raw_email || undefined,
+          title: rawData['Designation'] || undefined,
+          decision_maker_score: dmScore,
+          decision_maker: dmScore >= 80,
+          confidence_score: 80,
+          reasons: ['Found in Discovery Results']
+        });
+      }
+      if (result.raw_email) {
+        const name = this.extractNameFromEmail(result.raw_email);
+        if (name && !candidates.some(c => c.email === result.raw_email)) {
+          candidates.push({
+            name,
+            email: result.raw_email,
+            phone: result.raw_phone || undefined,
+            decision_maker_score: 20,
+            decision_maker: false,
+            confidence_score: 60,
+            reasons: ['Extracted from email address']
+          });
+        }
+      }
+    }
+
+    const allScrapedContacts = pythonOutput.results || [];
+    const pythonMetrics = pythonOutput.metrics || {};
+    
+    const { candidates: newCandidates } = this.processScrapedContacts(allScrapedContacts, pythonMetrics, company.website_url);
+    for (const nc of newCandidates) {
+      if (!candidates.some(c => c.name.toLowerCase() === nc.name.toLowerCase() || (nc.email && c.email === nc.email))) {
+        if (nc.name.toLowerCase() !== company.name.toLowerCase()) {
+          candidates.push(nc);
+        }
+      }
+    }
+
+    const contactRepo = new ContactRepository();
+    const emailDiscoveryService = new EmailDiscoveryService();
+    const phoneVerificationService = new PhoneVerificationService();
+    const contactInserts: ContactInsert[] = [];
+
+    for (const candidate of candidates) {
+      let firstName = '';
+      let lastName = '-';
+      let decisionMakerScore = candidate.decision_maker_score;
+
+      if (candidate.name === 'Business Contact') {
+        firstName = 'Business';
+        lastName = 'Contact';
+        decisionMakerScore = 20;
+      } else {
+        const validation = isValidHumanName(candidate.name, candidate.email, company.website_url || undefined);
+        if (!validation.isValid) continue;
+        const nameParts = candidate.name.split(' ');
+        firstName = nameParts[0] || candidate.name;
+        lastName = nameParts.slice(1).join(' ') || '-';
       }
 
-      const pythonProcess = spawn(PYTHON_PATH, args, {
-        cwd: WORKERS_DIR,
-      });
+      let finalEmail = candidate.email || null;
+      let emailVerified = false;
+      let emailVerifiedAt: Date | null = null;
+      if (!finalEmail && company.website_url) {
+        const discoveryResult = await emailDiscoveryService.discoverEmail(firstName, lastName, company.website_url);
+        finalEmail = discoveryResult.email;
+        emailVerified = discoveryResult.email_verified;
+        emailVerifiedAt = discoveryResult.email_verified_at;
+      }
 
-      let timeoutId: NodeJS.Timeout;
-      timeoutId = setTimeout(() => {
-        metrics.timeoutCount++;
-        pythonProcess.kill('SIGKILL');
-        resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: -1, rawStdout: 'TIMEOUT', success: false, error: 'TIMEOUT' });
-      }, timeoutMs);
-
-      let stdout = '';
-      let stderr = '';
-
-      pythonProcess.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      pythonProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-        console.log(`[FreeContactDiscoveryV3 Python] ${data.toString().trim()}`);
-      });
-
-      pythonProcess.on('close', (code, signal) => {
-        clearTimeout(timeoutId);
-        if (signal === 'SIGTERM' || signal === 'SIGKILL') {
-          console.error(`Free Contact Discovery v3 timed out after 60s and was killed.`);
-          resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: -1, rawStdout: stdout, success: false, error: 'TIMEOUT' });
-          return;
+      let finalPhone = candidate.phone || null;
+      let phoneVerified = false;
+      let phoneVerifiedAt: Date | null = null;
+      if (finalPhone) {
+        const phoneResult = await phoneVerificationService.verifyPhone(finalPhone);
+        if (phoneResult.e164Format) finalPhone = phoneResult.e164Format;
+        if (phoneResult.isValidFormat && phoneResult.isWhatsAppActive) {
+          phoneVerified = true;
+          phoneVerifiedAt = new Date();
         }
+      }
 
-        try {
-          const jsonStart = stdout.indexOf('{');
-          const jsonEnd = stdout.lastIndexOf('}') + 1;
-          if (jsonStart !== -1 && jsonEnd !== -1) {
-            const jsonStr = stdout.slice(jsonStart, jsonEnd);
-            const parsed = JSON.parse(jsonStr);
-            resolve({ 
-              contacts: parsed.contacts || [], 
-              businessContacts: parsed.businessContacts || [],
-              socialProfiles: parsed.socialProfiles || [],
-              contactPages: parsed.contactPages || [],
-              metrics: parsed.metrics || {}, 
-              exitCode: code, 
-              rawStdout: stdout, 
-              success: parsed.success, 
-              error: parsed.error 
-            });
-          } else {
-            console.error(`Free Contact Discovery v3 exited with code ${code}`);
-            console.error(`stderr: ${stderr}`);
-            resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: code, rawStdout: stdout, success: false, error: 'NO_JSON_FOUND' });
-          }
-        } catch (parseError) {
-          console.error(`Failed to parse Free Contact Discovery v3 output: ${parseError}`);
-          resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: code, rawStdout: stdout, success: false, error: 'PARSE_ERROR' });
-        }
+      contactInserts.push({
+        company_id: companyId,
+        first_name: firstName,
+        last_name: lastName,
+        email: finalEmail,
+        phone: finalPhone,
+        title: candidate.title || null,
+        department: candidate.department || null,
+        linkedin_url: candidate.linkedin || null,
+        is_decision_maker: decisionMakerScore >= 80,
+        is_primary_contact: false,
+        status: 'new',
+        email_verified: emailVerified,
+        email_verified_at: emailVerifiedAt,
+        phone_verified: phoneVerified,
+        phone_verified_at: phoneVerifiedAt,
+        source: candidate.source || null,
+        confidence_score: candidate.confidence_score,
+        confidence_reason: candidate.source ? `Matched via ${candidate.source}` : null,
+        verification_status: emailVerified || phoneVerified ? 'verified' : 'unverified',
+        last_verified_at: emailVerifiedAt || phoneVerifiedAt || null,
       });
+    }
 
-      pythonProcess.on('error', (err) => {
-        console.error(`Failed to spawn Free Contact Discovery v3: ${err.message}`);
-        resolve({ contacts: [], businessContacts: [], socialProfiles: [], contactPages: [], metrics: {}, exitCode: -2, rawStdout: `SPAWN ERROR: ${err.message}`, success: false, error: 'SPAWN_ERROR' });
-      });
-    });
+    let insertFailures = 0;
+    const createdContacts = [];
+    for (const c of contactInserts) {
+      try {
+        const result = await contactRepo.createContact(c);
+        createdContacts.push(result);
+      } catch (err: any) {
+        insertFailures++;
+        console.error(`[DB INSERT FAILURE] Contact: ${c.first_name} ${c.last_name} | Reason: ${err.message || JSON.stringify(err)}`);
+      }
+    }
+    
+    console.log(`ContactDiscovery: Processed and created ${createdContacts.length} contacts for company ${companyId}`);
+    return createdContacts.length;
   }
 
-  /**
-   * Spawns the website_contact_scraper.py Python script which uses ScrapeGraphAI.
-   */
-  private scrapeContactsFromWebsite(website: string, metrics: any): Promise<any[]> {
-    return new Promise((resolve, reject) => {
-      const args = ['website_contact_scraper.py', '--website', website];
 
-      const pythonProcess = spawn(PYTHON_PATH, args, {
-        cwd: WORKERS_DIR,
-      });
-
-      let timeoutId: NodeJS.Timeout;
-      timeoutId = setTimeout(() => {
-        metrics.timeoutCount++;
-        pythonProcess.kill('SIGKILL');
-        resolve([]);
-      }, 120000); // 120 seconds timeout
-
-      let stdout = '';
-      let stderr = '';
-
-      pythonProcess.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      pythonProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-        // Log Python stderr for debugging
-        console.log(`[WebsiteContactScraper Python] ${data.toString().trim()}`);
-      });
-
-      pythonProcess.on('close', (code, signal) => {
-        clearTimeout(timeoutId);
-        if (code !== 0) {
-          if (signal === 'SIGTERM') {
-            console.error(`Website Contact scraper timed out after 120s and was killed.`);
-          } else {
-            console.error(`Website Contact scraper exited with code ${code}`);
-            console.error(`stderr: ${stderr}`);
-          }
-          resolve([]);
-          return;
-        }
-
-        try {
-          const jsonStart = stdout.indexOf('[');
-          const jsonEnd = stdout.lastIndexOf(']') + 1;
-          if (jsonStart !== -1 && jsonEnd !== -1) {
-            const jsonStr = stdout.slice(jsonStart, jsonEnd);
-            const contacts = JSON.parse(jsonStr);
-            resolve(contacts);
-          } else {
-            resolve([]);
-          }
-        } catch (parseError) {
-          console.error(`Failed to parse website contact scraper output: ${parseError}`);
-          resolve([]);
-        }
-      });
-
-      pythonProcess.on('error', (err) => {
-        console.error(`Failed to spawn website contact scraper: ${err.message}`);
-        resolve([]);
-      });
-    });
-  }
 
   /**
    * Score a job title for decision-maker likelihood (0-100).

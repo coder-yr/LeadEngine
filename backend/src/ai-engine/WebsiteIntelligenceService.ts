@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -10,6 +10,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const redis = new Redis(redisConfig as any);
+
+import { QueueEvents } from 'bullmq';
+import { websiteExecuteQueue } from '../orchestration/Queues.js';
 
 export interface WebsiteDocument {
     url: string;
@@ -53,7 +56,7 @@ export class WebsiteIntelligenceService {
         const startTime = Date.now();
 
         try {
-            const result = await this.spawnPythonCrawler(normalizedUrl);
+            const result = await this.runPythonCrawlerViaQueue(normalizedUrl);
             
             const elapsed = Date.now() - startTime;
             TelemetryService.trackEvent('website_crawl_success', { 
@@ -76,63 +79,31 @@ export class WebsiteIntelligenceService {
         }
     }
 
-    private static spawnPythonCrawler(url: string): Promise<WebsiteDocument> {
-        return new Promise((resolve, reject) => {
-            // Resolve virtualenv python path relative to backend src folder (../../../workers/venv)
-            let pythonPath = 'python';
-            const venvWin = path.resolve(__dirname, '../../../workers/venv/Scripts/python.exe');
-            const venvLinux = path.resolve(__dirname, '../../../workers/venv/bin/python');
+    private static async runPythonCrawlerViaQueue(url: string): Promise<WebsiteDocument> {
+        const queueEvents = new QueueEvents('website.execute.queue', { connection: redisConfig });
+        
+        // Use a unique ID for this ad-hoc test
+        const jobId = `test-audit-${Date.now()}`;
+        
+        const job = await websiteExecuteQueue.add('run-website-intelligence-adhoc', {
+            url,
+            pipelineId: jobId, // dummy
+            companyId: null,
+            traceId: jobId
+        }, { jobId });
 
-            if (fs.existsSync(venvWin)) {
-                pythonPath = venvWin;
-            } else if (fs.existsSync(venvLinux)) {
-                pythonPath = venvLinux;
-            } else if (process.env.VIRTUAL_ENV) {
-                pythonPath = path.join(process.env.VIRTUAL_ENV, 'Scripts', 'python.exe');
-            }
-                
-            const scriptPath = path.resolve(__dirname, '../../../workers/src/website_crawler.py');
-
-            const child = spawn(pythonPath, [scriptPath, url]);
-
-            let stdoutData = '';
-            let stderrData = '';
-
-            child.stdout.on('data', (data) => {
-                stdoutData += data.toString();
-            });
-
-            child.stderr.on('data', (data) => {
-                stderrData += data.toString();
-            });
-
-            child.on('close', (code) => {
-                if (code !== 0) {
-                    return reject(new Error(`Crawler exited with code ${code}. Stderr: ${stderrData}`));
-                }
-
-                try {
-                    // Extract JSON block
-                    const jsonMatch = stdoutData.match(/\{[\s\S]*\}/);
-                    if (!jsonMatch) {
-                        return reject(new Error('No valid JSON returned from crawler.'));
-                    }
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    if (parsed.error) {
-                        return reject(new Error(`Crawler script error: ${parsed.error}`));
-                    }
-                    resolve(parsed as WebsiteDocument);
-                } catch (e) {
-                    reject(new Error(`Failed to parse crawler output: ${(e as any).message}. Output: ${stdoutData.substring(0, 500)}`));
-                }
-            });
+        try {
+            // Wait up to 60 seconds
+            const result = await job.waitUntilFinished(queueEvents, 60000);
             
-            // 45-second overall safety timeout (python script internal limits are 20s)
-            setTimeout(() => {
-                child.kill();
-                reject(new Error('Crawler process timed out after 45s.'));
-            }, 45000);
-        });
+            if (result.status === 'error' || result.status === 'failed') {
+                throw new Error(result.error || 'Crawler failed');
+            }
+            
+            return result as WebsiteDocument;
+        } finally {
+            await queueEvents.close();
+        }
     }
 }
 
