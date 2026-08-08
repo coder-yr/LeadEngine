@@ -20,8 +20,7 @@ REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", "")
 redis_opts = {
     "host": REDIS_HOST,
     "port": REDIS_PORT,
-    "password": REDIS_PASSWORD,
-    "decode_responses": True
+    "password": REDIS_PASSWORD
 }
 
 # Task Registry
