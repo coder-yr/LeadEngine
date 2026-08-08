@@ -55,7 +55,11 @@ async def process_job(job: Job, job_token: str):
     """
     Generic job processor that delegates to the appropriate Task handler based on the queue name.
     """
-    queue_name = job.queue_name
+    # In Python bullmq, queue_name isn't an attribute, but job.queue is the Queue/Worker object
+    queue_name = getattr(job, "queue_name", getattr(job.queue, "name", None))
+    if not queue_name:
+        queue_name = job.queueQualifiedName.replace("bull:", "") if getattr(job, "queueQualifiedName", None) else "unknown"
+        
     handler = TASKS.get(queue_name)
     
     if not handler:
