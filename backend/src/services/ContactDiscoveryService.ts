@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase.js';
+import { contactExecuteQueue } from '../orchestration/Queues.js';
 
 import path from 'path';
 import fs from 'fs';
@@ -686,14 +687,7 @@ export class ContactDiscoveryService {
     let pythonRawJson = '';
     
     if (contactDiscoveryAllowed && finalWebsiteUrl) {
-      // Run the new Free Contact Discovery v3 pipeline
-      const startTime = Date.now();
-      const enrichmentResult = await this.scrapeWithFreeV3(company.name, finalWebsiteUrl, metrics);
-      allScrapedContacts = enrichmentResult.contacts || [];
-      pythonMetrics = enrichmentResult.metrics || {};
-      pythonExitCode = enrichmentResult.exitCode;
-      pythonRawJson = enrichmentResult.rawStdout;
-      metrics.websiteScrapeTime = Date.now() - startTime;
+      throw new Error("Synchronous scrapeWithFreeV3 is deprecated. Use async BullMQ orchestrator.");
     }
     
     const { candidates: newCandidates } = this.processScrapedContacts(allScrapedContacts, pythonMetrics, finalWebsiteUrl || undefined);
@@ -837,21 +831,7 @@ export class ContactDiscoveryService {
     const wasNormalized = true; // Since we always normalize
     
     try {
-      url = normalizeUrl(url);
-      const startTime = Date.now();
-      let companyName = "Unknown Company";
-      try { companyName = new URL(url).hostname.replace('www.', ''); } catch (e) {}
-      
-      const timeoutMs = options.quickAudit ? 20000 : 120000;
-      const enrichmentResult = await this.scrapeWithFreeV3(companyName, url, metrics, timeoutMs, options);
-      allScrapedContacts = enrichmentResult.contacts || [];
-      businessContacts = enrichmentResult.businessContacts || [];
-      socialProfiles = enrichmentResult.socialProfiles || [];
-      contactPages = enrichmentResult.contactPages || [];
-      pythonMetrics = enrichmentResult.metrics || {};
-      pythonSuccess = enrichmentResult.success !== false;
-      pythonError = enrichmentResult.error || '';
-      metrics.websiteScrapeTime = Date.now() - startTime;
+      throw new Error("Synchronous scrapeWithFreeV3 is deprecated. Use async BullMQ orchestrator.");
     } catch (e) {
       console.error('Test Discovery failed:', e);
       pythonSuccess = false;
@@ -891,7 +871,6 @@ export class ContactDiscoveryService {
     };
   }
 
-import { contactExecuteQueue } from '../orchestration/Queues.js';
 
   /**
    * Enqueues a Contact Discovery job to the Python worker.

@@ -54,7 +54,7 @@ import path from 'path';
 import { StageDispatcher } from './StageDispatcher.js';
 import { DiscoveryStage } from '../services/IdentityResolutionService.js';
 
-import { discoveryCompletedQueue, failedDiscoveryQueue } from './Queues.js';
+import { discoveryCompletedQueue } from './Queues.js';
 import { DiscoveryService } from '../services/discovery.service.js';
 
 // 0. Discovery Completed Worker (Consumes from Python Worker)
@@ -592,7 +592,7 @@ function attachLifecycleLogs(worker: Worker, stageName: string) {
   });
 }
 
-attachLifecycleLogs(discoveryWorker, 'Discovery');
+
 attachLifecycleLogs(intelligenceWorker, 'Intelligence');
 attachLifecycleLogs(cacheCheckWorker, 'Cache Check');
 attachLifecycleLogs(confidenceEvaluationWorker, 'Confidence Evaluation');

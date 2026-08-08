@@ -62,6 +62,26 @@ export const analysisCompletedQueue = new Queue('analysis.completed.queue', {
 // ----------------------------------------------------------------------
 // NODE ORCHESTRATION QUEUES (Consumed by Node, Enqueued by Node)
 // ----------------------------------------------------------------------
+export const intelligenceQueue = new Queue('intelligence-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const contactDiscoveryQueue = new Queue('contact-discovery-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const websiteIntelligenceQueue = new Queue('website-intelligence-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
+export const discoveryQueue = new Queue('discovery-queue', {
+  connection: redisConfig,
+  ...sharedQueueOptions,
+});
+
 export const identityResolutionQueue = new Queue('identity-resolution-queue', {
   connection: redisConfig,
   ...sharedQueueOptions,
