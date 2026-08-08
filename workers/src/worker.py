@@ -80,7 +80,7 @@ async def process_job(job: Job, job_token: str):
             "pipelineId": job.data.get("pipelineId"),
             "companyId": job.data.get("companyId"),
             "traceId": job.data.get("traceId"),
-            "jobId": job.id,
+            "jobId": job.data.get("jobId"),
             "payload": result
         }
         
