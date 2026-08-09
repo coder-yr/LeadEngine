@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,7 +32,7 @@ export default function WebsiteAuditTester() {
     setResult(null);
 
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/audit/test`, {
+      const res = await api.post(`/audit/test`, {
         url: normalizedUrl,
         type: isDeepAudit ? "deep" : "quick"
       });

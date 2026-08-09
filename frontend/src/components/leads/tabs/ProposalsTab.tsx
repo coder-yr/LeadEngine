@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Loader2, ExternalLink } from "lucide-react";
@@ -18,7 +18,7 @@ export function ProposalsTab({ companyId }: { companyId: string }) {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/proposals/${companyId}`);
+      const res = await api.get(`/proposals/${companyId}`);
       setProposals(res.data);
     } catch (error) {
       console.error("Failed to fetch proposals", error);
@@ -34,7 +34,7 @@ export function ProposalsTab({ companyId }: { companyId: string }) {
   const handleGenerate = async () => {
     try {
       setGenerating(true);
-      await axios.post(`${import.meta.env.VITE_API_URL}/proposals/${companyId}/generate`);
+      await api.post(`/proposals/${companyId}/generate`);
       await fetchProposals();
     } catch (error) {
       console.error("Failed to generate proposal", error);

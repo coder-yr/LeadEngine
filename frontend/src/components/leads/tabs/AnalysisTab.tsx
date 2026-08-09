@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -25,7 +25,7 @@ export function AnalysisTab({ company, onAnalysisComplete }: { company: any, onA
     // Only connect SSE if we are running analysis
     if (status !== 'ANALYSIS_RUNNING') return;
 
-    const eventSource = new EventSource(`${import.meta.env.VITE_API_URL}/analysis/${company.id}/stream`);
+    const eventSource = new EventSource(`/analysis/${company.id}/stream`);
 
     eventSource.onmessage = (event) => {
       try {
@@ -60,7 +60,7 @@ export function AnalysisTab({ company, onAnalysisComplete }: { company: any, onA
   const startAnalysis = async () => {
     try {
       setLoading(true);
-      await axios.post(`${import.meta.env.VITE_API_URL}/analysis/${company.id}`);
+      await api.post(`/analysis/${company.id}`);
       setStatus('ANALYSIS_RUNNING');
       setProgressData({ stage: 'INIT', status: 'RUNNING', progress: 5, message: 'Starting analysis pipeline...' });
     } catch (err) {

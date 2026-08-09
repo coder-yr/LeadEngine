@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,7 @@ export function CreateCampaignBuilder({ onCampaignCreated }: { onCampaignCreated
 
   useEffect(() => {
     if (open) {
-      axios.get(`${import.meta.env.VITE_API_URL}/companies`).then((res) => {
+      api.get(`/companies`).then((res) => {
 
         if (res.data.length > 0) setCompanyId(res.data[0].id);
       });
@@ -62,7 +62,7 @@ export function CreateCampaignBuilder({ onCampaignCreated }: { onCampaignCreated
 
     setLoading(true);
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/campaigns`, {
+      await api.post(`/campaigns`, {
         name,
         campaign_type: type,
         company_id: companyId,

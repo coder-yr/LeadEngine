@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -18,7 +18,7 @@ export function ContactsTab({ company }: ContactsTabProps) {
     const fetchContacts = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${import.meta.env.VITE_API_URL}/contacts/company/${company.id}`);
+        const res = await api.get(`/contacts/company/${company.id}`);
         setContacts(res.data);
       } catch (error) {
         console.error("Failed to fetch contacts", error);

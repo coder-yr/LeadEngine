@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { CompanyCard } from "./CompanyCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export function CompanyList() {
     const fetchCompanies = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${import.meta.env.VITE_API_URL}/companies`);
+        const res = await api.get(`/companies`);
         
         // Map backend DB objects to frontend Company schema
         const mappedCompanies = res.data.map((dbCompany: any) => {
@@ -69,7 +69,7 @@ export function CompanyList() {
     if (selectedIds.size === 0) return;
     try {
       setLoading(true);
-      await axios.post(`${import.meta.env.VITE_API_URL}/analysis/bulk`, {
+      await api.post(`/analysis/bulk`, {
         companyIds: Array.from(selectedIds)
       });
       setSelectedIds(new Set());
@@ -89,7 +89,7 @@ export function CompanyList() {
     }
 
     try {
-      const res = await axios.delete(`${import.meta.env.VITE_API_URL}/companies/${companyId}`);
+      const res = await api.delete(`/companies/${companyId}`);
       if (res.data.success) {
         setCompanies(prev => prev.filter(c => c.id !== companyId));
         

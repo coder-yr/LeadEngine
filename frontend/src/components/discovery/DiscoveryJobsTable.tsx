@@ -3,7 +3,7 @@ import { Loader2, ChevronRight, Download, Trash2, CheckCircle2, XCircle, Clock, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import axios from "axios";
+import api from "@/lib/api";
 
 interface DiscoveryJob {
   id: string;
@@ -42,7 +42,7 @@ export function DiscoveryJobsTable({ jobs, onSelectJob, onRefresh }: DiscoveryJo
     if (!confirm("Are you sure you want to delete this discovery job?")) return;
     
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/discovery/jobs/${id}`);
+      await api.delete(`/discovery/jobs/${id}`);
       onRefresh();
     } catch (error) {
       alert("Failed to delete");
@@ -51,7 +51,7 @@ export function DiscoveryJobsTable({ jobs, onSelectJob, onRefresh }: DiscoveryJo
 
   const handleExport = (id: string, format: 'csv' | 'xlsx', e: React.MouseEvent) => {
     e.stopPropagation();
-    window.open(`${import.meta.env.VITE_API_URL}/discovery/export/${id}${format === 'xlsx' ? '/xlsx' : ''}`, '_blank');
+    window.open(`/discovery/export/${id}${format === 'xlsx' ? '/xlsx' : ''}`, '_blank');
   };
 
   if (jobs.length === 0) {

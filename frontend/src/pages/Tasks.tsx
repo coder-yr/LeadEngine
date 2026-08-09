@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ export default function Tasks() {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/tasks`);
+      const res = await api.get(`/tasks`);
       setTasks(res.data);
     } catch (error) {
       console.error("Failed to fetch tasks", error);
@@ -33,7 +33,7 @@ export default function Tasks() {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
 
     try {
-      await axios.patch(`${import.meta.env.VITE_API_URL}/tasks/${taskId}/status`, {
+      await api.patch(`/tasks/${taskId}/status`, {
         status: newStatus
       });
     } catch (error) {

@@ -48,7 +48,8 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vite": "^5.0.0",
-    "zustand": "^4.5.0"
+    "zustand": "^4.5.0",
+    "@supabase/supabase-js": "^2.38.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",

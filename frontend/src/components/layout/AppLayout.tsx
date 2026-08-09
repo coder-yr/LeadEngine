@@ -4,27 +4,32 @@ import {
   LayoutDashboard, 
   Building2, 
   Search, 
-  Target, 
-  KanbanSquare, 
-  ListTodo,
-  Settings,
+  BarChart3,
+  ListChecks,
+  FileText,
+  Megaphone,
   Activity,
+  Settings,
   TestTubes,
   Menu,
-  X
+  X,
+  Contact,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "./CommandPalette";
+import { UserMenu } from "./UserMenu";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Discovery', href: '/discovery', icon: Search },
+  { name: 'Discover', href: '/discovery', icon: Search },
   { name: 'Companies', href: '/companies', icon: Building2 },
-  { name: 'Leads', href: '/leads', icon: Target },
-  { name: 'Pipeline', href: '/pipeline', icon: KanbanSquare },
-  { name: 'Campaigns', href: '/campaigns', icon: Activity },
-  { name: 'Tasks', href: '/tasks', icon: ListTodo },
+  { name: 'Contacts', href: '/leads', icon: Contact },
+  { name: 'Lists', href: '/leads', icon: ListChecks },
+  { name: 'Analysis', href: '/pipeline', icon: BarChart3 },
+  { name: 'Proposals', href: '/pipeline', icon: FileText },
+  { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
+  { name: 'Activity', href: '/activities', icon: Activity },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -33,14 +38,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
+  // Match active route — use startsWith for sub-routes but exact for "/"
+  const isActive = (href: string) => {
+    if (href === '/') return location.pathname === '/';
+    return location.pathname.startsWith(href);
+  };
+
   const SidebarContent = () => (
     <>
-      <div className="p-6 flex items-center justify-between border-b border-border/50">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center premium-shadow">
-            <span className="font-bold text-primary-foreground text-lg">L</span>
+      <div className="p-5 flex items-center justify-between border-b border-border/50">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-lg flex items-center justify-center shadow-sm">
+            <span className="font-bold text-white text-sm">L</span>
           </div>
-          <span className="font-bold text-xl tracking-tight text-foreground">LeadEngine</span>
+          <span className="font-bold text-lg tracking-tight text-foreground">LeadEngine</span>
         </div>
         <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleMobileMenu}>
           <X className="w-5 h-5" />
@@ -48,61 +59,58 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       
       <div className="flex-1 overflow-y-auto py-4">
-        <nav className="grid gap-1 px-4">
-          <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3 mt-2 px-3">
-            Core
+        <nav className="grid gap-0.5 px-3">
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2 mt-2 px-2">
+            Workspace
           </div>
-          {navigation.map((item) => {
-            const isActive = location.pathname === item.href;
-            return (
-              <Link
-                key={item.name}
-                to={item.href}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200",
-                  isActive 
-                    ? "bg-primary text-primary-foreground premium-shadow" 
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.name}
-              </Link>
-            );
-          })}
+          {navigation.map((item) => (
+            <Link
+              key={item.name}
+              to={item.href}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={cn(
+                "flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150",
+                isActive(item.href)
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              {item.name}
+            </Link>
+          ))}
           
-          <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3 mt-8 px-3">
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2 mt-6 px-2">
             Tools
           </div>
           <Link
             to="/tools/audit-tester"
             onClick={() => setIsMobileMenuOpen(false)}
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200",
-              location.pathname === "/tools/audit-tester" 
-                ? "bg-primary text-primary-foreground premium-shadow" 
+              "flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150",
+              location.pathname === "/tools/audit-tester"
+                ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
-            <TestTubes className="h-4 w-4" />
+            <TestTubes className="h-4 w-4 shrink-0" />
             Audit Tester
           </Link>
         </nav>
       </div>
 
-      <div className="p-4 border-t border-border/50 mt-auto">
+      <div className="p-3 border-t border-border/50 mt-auto">
         <Link
           to="/settings"
           onClick={() => setIsMobileMenuOpen(false)}
           className={cn(
-            "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200",
+            "flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150",
             location.pathname === "/settings"
-              ? "bg-primary text-primary-foreground premium-shadow" 
+              ? "bg-primary text-primary-foreground shadow-sm"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
         >
-          <Settings className="h-4 w-4" />
+          <Settings className="h-4 w-4 shrink-0" />
           Settings
         </Link>
       </div>
@@ -112,7 +120,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 border-r border-border/50 bg-card flex-col z-20">
+      <aside className="hidden md:flex w-60 border-r border-border/50 bg-card flex-col z-20 shrink-0">
         <SidebarContent />
       </aside>
 
@@ -123,7 +131,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 w-72 bg-card flex flex-col z-50 transform transition-transform duration-300 ease-in-out md:hidden border-r border-border/50 premium-shadow",
+        "fixed inset-y-0 left-0 w-72 bg-card flex flex-col z-50 transform transition-transform duration-300 ease-in-out md:hidden border-r border-border/50 shadow-xl",
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <SidebarContent />
@@ -132,23 +140,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         {/* Header Bar */}
-        <header className="h-16 glass-header flex items-center justify-between px-4 md:px-6 z-10 shrink-0">
-          <div className="flex flex-1 items-center gap-4">
-            <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleMobileMenu}>
-              <Menu className="w-5 h-5" />
+        <header className="h-14 glass-header flex items-center justify-between px-4 md:px-5 z-10 shrink-0">
+          <div className="flex flex-1 items-center gap-3">
+            <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={toggleMobileMenu}>
+              <Menu className="w-4 h-4" />
             </Button>
-            <div className="flex-1 max-w-xl hidden sm:block">
+            <div className="flex-1 max-w-sm hidden sm:block">
               <CommandPalette />
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="sm:hidden">
-               <CommandPalette />
+              <CommandPalette />
             </div>
-            {/* User Profile Mock */}
-            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-medium text-primary">
-              Y
-            </div>
+            <UserMenu />
           </div>
         </header>
 

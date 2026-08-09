@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import {
   DndContext,
   DragOverlay,
@@ -35,7 +35,7 @@ export default function Pipeline() {
   const fetchCompanies = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/companies`);
+      const res = await api.get(`/companies`);
       setCompanies(res.data);
     } catch (error) {
       console.error("Failed to fetch companies", error);
@@ -99,7 +99,7 @@ export default function Pipeline() {
 
       // Backend update
       try {
-        await axios.patch(`${import.meta.env.VITE_API_URL}/companies/${activeCompanyId}/stage`, {
+        await api.patch(`/companies/${activeCompanyId}/stage`, {
           stage: targetStage,
         });
       } catch (error) {

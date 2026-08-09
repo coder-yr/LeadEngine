@@ -5,7 +5,7 @@ import { DiscoverySearchForm } from "@/components/discovery/DiscoverySearchForm"
 import { DiscoveryStats } from "@/components/discovery/DiscoveryStats";
 import { DiscoveryJobsTable } from "@/components/discovery/DiscoveryJobsTable";
 import { Button } from "@/components/ui/button";
-import axios from "axios";
+import api from "@/lib/api";
 
 export default function Discovery() {
   const [stats, setStats] = useState({
@@ -23,8 +23,8 @@ export default function Discovery() {
   const fetchData = async () => {
     try {
       const [statsRes, jobsRes] = await Promise.all([
-        axios.get(`${import.meta.env.VITE_API_URL}/discovery/stats`),
-        axios.get(`${import.meta.env.VITE_API_URL}/discovery/jobs?limit=20`),
+        api.get('/discovery/stats'),
+        api.get('/discovery/jobs?limit=20'),
       ]);
       setStats(statsRes.data);
       setJobs(jobsRes.data.data);
@@ -35,7 +35,7 @@ export default function Discovery() {
 
   const fetchJobResults = async (jobId: string) => {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/discovery/jobs/${jobId}/results`);
+      const res = await api.get(`/discovery/jobs/${jobId}/results`);
       setJobResults(res.data);
     } catch (error) {
       console.error("Failed to fetch job results:", error);
@@ -68,7 +68,7 @@ export default function Discovery() {
 
   const handleBulkAnalyze = async (resultIds: string[]) => {
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/discovery/bulk-analyze`, { resultIds });
+      await api.post('/discovery/bulk-analyze', { resultIds });
       alert(`Triggered intelligence workflows for ${resultIds.length} records. The UI will update shortly.`);
       
       if (selectedJob) {

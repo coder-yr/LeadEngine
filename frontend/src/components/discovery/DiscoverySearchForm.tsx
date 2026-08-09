@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import axios from "axios";
+import api from "@/lib/api";
 
 const STANDARD_SOURCES = [
   { id: "google_maps", label: "Google Maps" },
@@ -56,7 +56,7 @@ export function DiscoverySearchForm({ onJobStarted }: DiscoverySearchFormProps) 
 
     setIsLoading(true);
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/discovery/search`, {
+      await api.post(`/discovery/search`, {
         keyword: keyword.trim(),
         city: city.trim(),
         sources,

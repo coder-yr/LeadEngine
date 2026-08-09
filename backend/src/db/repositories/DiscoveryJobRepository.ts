@@ -5,6 +5,7 @@ export interface DiscoveryJobInput {
   city: string;
   sources: string[];
   max_results?: number;
+  userId?: string;
 }
 
 export interface DiscoveryJobUpdate {
@@ -27,6 +28,7 @@ export class DiscoveryJobRepository {
         city: input.city,
         sources: input.sources,
         status: 'pending',
+        user_id: input.userId || null,
       }])
       .select()
       .single();
@@ -53,7 +55,7 @@ export class DiscoveryJobRepository {
     return data;
   }
 
-  async getById(jobId: string) {
+  async getById(jobId: string, userId?: string) {
     const { data, error } = await supabase
       .from('discovery_jobs')
       .select('*')
@@ -64,15 +66,28 @@ export class DiscoveryJobRepository {
       console.error(`Error fetching discovery job ${jobId}:`, error);
       throw error;
     }
+
+    // Ownership check — if the job has a user_id, verify it matches the requester
+    if (userId && data && data.user_id && data.user_id !== userId) {
+      return null; // Treat as not found to prevent leaking existence
+    }
+
     return data;
   }
 
-  async getAll(limit = 50, offset = 0) {
-    const { data, error, count } = await supabase
+  async getAll(limit = 50, offset = 0, userId?: string) {
+    let query = supabase
       .from('discovery_jobs')
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    // Scope results to the requesting user when userId is provided
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data, error, count } = await query;
 
     if (error) {
       console.error('Error fetching discovery jobs:', error);
@@ -156,10 +171,16 @@ export class DiscoveryJobRepository {
     }
   }
 
-  async getStats() {
-    const { data: jobs, error } = await supabase
+  async getStats(userId?: string) {
+    let query = supabase
       .from('discovery_jobs')
       .select('status, total_raw_results, total_after_dedup, total_companies_created');
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data: jobs, error } = await query;
 
     if (error) {
       console.error('Error fetching discovery stats:', error);

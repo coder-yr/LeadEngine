@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { CreateCampaignBuilder } from "@/components/campaigns/CreateCampaignBuilder";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ export default function Campaigns() {
   const fetchCampaigns = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/campaigns`);
+      const res = await api.get(`/campaigns`);
       setCampaigns(res.data);
     } catch (error) {
       console.error("Failed to fetch campaigns", error);
@@ -93,7 +93,7 @@ export default function Campaigns() {
                     </div>
                     <Button variant="outline" size="sm" onClick={async () => {
                       try {
-                        const res = await axios.get(`${import.meta.env.VITE_API_URL}/contacts/company/${campaign.company_id}`);
+                        const res = await api.get(`/contacts/company/${campaign.company_id}`);
                         const contacts = res.data;
                         if (!contacts || contacts.length === 0) {
                           alert("No contacts found for this company to enroll.");
@@ -105,7 +105,7 @@ export default function Campaigns() {
                           company_id: campaign.company_id
                         }));
 
-                        await axios.post(`${import.meta.env.VITE_API_URL}/campaigns/${campaign.id}/enroll`, {
+                        await api.post(`/campaigns/${campaign.id}/enroll`, {
                           contacts: enrollments
                         });
                         

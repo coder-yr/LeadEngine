@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ export function CreateTaskDialog({ onTaskCreated }: { onTaskCreated: () => void 
 
   useEffect(() => {
     if (open) {
-      axios.get(`${import.meta.env.VITE_API_URL}/companies`).then((res) => {
+      api.get(`/companies`).then((res) => {
         setCompanies(res.data);
       });
     }
@@ -33,7 +33,7 @@ export function CreateTaskDialog({ onTaskCreated }: { onTaskCreated: () => void 
 
     setLoading(true);
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/tasks`, {
+      await api.post(`/tasks`, {
         title,
         type,
         company_id: companyId,

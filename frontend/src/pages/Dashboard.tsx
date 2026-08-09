@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import axios from "axios"
+import api from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, Flame, Target, DollarSign, TrendingUp } from "lucide-react"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Area, AreaChart } from "recharts"
@@ -13,7 +13,7 @@ export default function Dashboard() {
     const fetchAnalytics = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${import.meta.env.VITE_API_URL}/analytics/dashboard`);
+        const res = await api.get('/analytics/dashboard');
         setData(res.data);
       } catch (error) {
         console.error("Failed to fetch analytics", error);

@@ -34,14 +34,20 @@ export class DiscoveryService {
    * Start a new discovery job.
    * Creates the job record and enqueues to Python workers.
    */
-  async startDiscovery(input: DiscoveryJobInput): Promise<string> {
+  async startDiscovery(input: DiscoveryJobInput & { userId?: string }): Promise<string> {
     // 1. Create job record
-    const jobRecord = await this.jobRepo.create(input);
+    const jobRecord = await this.jobRepo.create({
+      ...input,
+      userId: input.userId,
+    });
     const jobId = jobRecord.id;
 
     // 2. Add job to execution queue
+    // userId is carried as correlation data — Python workers don't need to auth,
+    // they just pass it back so Node can authorize the completion handler.
     const payload = {
       jobId,
+      userId: input.userId || null,
       pipelineId: jobId, // Root of pipeline
       keyword: input.keyword,
       city: input.city,

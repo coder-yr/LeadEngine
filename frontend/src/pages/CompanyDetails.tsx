@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom"
 import { useState, useEffect, useCallback } from "react"
-import axios from "axios"
+import api from "@/lib/api"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,7 +38,7 @@ export default function CompanyDetails() {
     if (!id) return;
     try {
       setLoading(true);
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/companies/${id}`);
+      const res = await api.get(`/companies/${id}`);
       const dbCompany = res.data;
       const aiInsights = dbCompany.company_ai_insights || {};
       

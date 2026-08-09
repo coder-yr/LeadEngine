@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "@/lib/api";
 import { LeadTable } from "./LeadTable";
 import { LeadDetail } from "./LeadDetail";
 import { Loader2 } from "lucide-react";
@@ -13,7 +13,7 @@ export function LeadWorkspace() {
     const fetchLeads = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${import.meta.env.VITE_API_URL}/companies`);
+        const res = await api.get(`/companies`);
         
         // Map companies to the expected Lead structure
         const mappedLeads = res.data.map((dbCompany: any) => {

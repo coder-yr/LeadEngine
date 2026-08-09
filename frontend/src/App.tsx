@@ -1,7 +1,13 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 
-// Pages
+// Public pages
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+
+// Protected pages
 import Dashboard from './pages/Dashboard';
 import Discovery from './pages/Discovery';
 import Companies from './pages/Companies';
@@ -16,24 +22,40 @@ import WebsiteAuditTester from './pages/WebsiteAuditTester';
 
 export function App() {
   return (
-    <Router>
-      <AppLayout>
+    <AuthProvider>
+      <Router>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/discovery" element={<Discovery />} />
-          <Route path="/companies" element={<Companies />} />
-          <Route path="/companies/:id" element={<CompanyDetails />} />
-          <Route path="/leads" element={<Leads />} />
-          <Route path="/pipeline" element={<Pipeline />} />
-          <Route path="/campaigns" element={<Campaigns />} />
-          <Route path="/tasks" element={<Tasks />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/activities" element={<Activities />} />
-          <Route path="/tools/audit-tester" element={<WebsiteAuditTester />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+
+          {/* Protected routes — all wrapped in AppLayout */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/discovery" element={<Discovery />} />
+                    <Route path="/companies" element={<Companies />} />
+                    <Route path="/companies/:id" element={<CompanyDetails />} />
+                    <Route path="/leads" element={<Leads />} />
+                    <Route path="/pipeline" element={<Pipeline />} />
+                    <Route path="/campaigns" element={<Campaigns />} />
+                    <Route path="/tasks" element={<Tasks />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/activities" element={<Activities />} />
+                    <Route path="/tools/audit-tester" element={<WebsiteAuditTester />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
         </Routes>
-      </AppLayout>
-    </Router>
+      </Router>
+    </AuthProvider>
   );
 }
 
