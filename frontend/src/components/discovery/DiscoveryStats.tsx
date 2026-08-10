@@ -1,92 +1,98 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, Search, ShieldCheck, Database } from "lucide-react";
+import { Search, Database, Sparkles, ShieldCheck } from "lucide-react";
 
 interface DiscoveryStatsProps {
   stats: {
-    totalJobs: number;
-    completedJobs: number;
-    runningJobs: number;
-    totalDiscovered: number;
-    totalAfterDedup: number;
-    totalCompaniesCreated: number;
+    totalJobs?: number;
+    completedJobs?: number;
+    runningJobs?: number;
+    totalDiscovered?: number;
+    totalAfterDedup?: number;
+    totalNew?: number;
+    totalExisting?: number;
   };
 }
 
 export function DiscoveryStats({ stats }: DiscoveryStatsProps) {
-  const dedupRate = stats.totalDiscovered > 0 
-    ? Math.round(((stats.totalDiscovered - stats.totalAfterDedup) / stats.totalDiscovered) * 100)
-    : 0;
+  const totalFound = stats.totalAfterDedup || 0;
+  const known = stats.totalExisting || 0;
+  const newLeads = stats.totalNew || 0;
+  const duplicates = (stats.totalDiscovered || 0) - totalFound;
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-      <Card className="relative overflow-hidden group bg-white/80 border-slate-200/60 backdrop-blur-xl shadow-sm hover:border-indigo-300 transition-all duration-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10">
+    <div className="grid gap-6 grid-cols-2 lg:grid-cols-4">
+      {/* Total Found */}
+      <Card className="relative overflow-hidden group bg-white/80 border-slate-200/60 backdrop-blur-xl shadow-sm hover:border-indigo-300 transition-all duration-300">
         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
           <Search className="w-24 h-24 text-indigo-600 -mr-6 -mt-6" />
         </div>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-          <CardTitle className="text-sm font-medium text-slate-500">Total Jobs Run</CardTitle>
-          <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600">
+          <CardTitle className="text-sm font-medium text-slate-500">Total Found</CardTitle>
+          <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
             <Search className="h-4 w-4" />
           </div>
         </CardHeader>
         <CardContent className="relative z-10">
-          <div className="text-3xl font-bold text-slate-900 tracking-tight">{stats.totalJobs}</div>
-          <p className="text-xs font-medium text-indigo-600 mt-2 flex items-center">
-            {stats.runningJobs} currently running
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{totalFound.toLocaleString()}</div>
+          <p className="text-xs font-medium text-slate-500 mt-2">
+            Companies across all searches
           </p>
         </CardContent>
       </Card>
 
-      <Card className="relative overflow-hidden group bg-white/80 border-slate-200/60 backdrop-blur-xl shadow-sm hover:border-blue-300 transition-all duration-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/10">
+      {/* Known */}
+      <Card className="relative overflow-hidden group bg-white/80 border-slate-200/60 backdrop-blur-xl shadow-sm hover:border-slate-300 transition-all duration-300">
         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-          <Database className="w-24 h-24 text-blue-600 -mr-6 -mt-6" />
+          <Database className="w-24 h-24 text-slate-600 -mr-6 -mt-6" />
         </div>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-          <CardTitle className="text-sm font-medium text-slate-500">Raw Leads Found</CardTitle>
-          <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
+          <CardTitle className="text-sm font-medium text-slate-500">Known Intelligence</CardTitle>
+          <div className="p-2 rounded-lg bg-slate-100 text-slate-600">
             <Database className="h-4 w-4" />
           </div>
         </CardHeader>
         <CardContent className="relative z-10">
-          <div className="text-3xl font-bold text-slate-900 tracking-tight">{stats.totalDiscovered.toLocaleString()}</div>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{known.toLocaleString()}</div>
           <p className="text-xs font-medium text-slate-500 mt-2">
-            Across all active sources
+            Already exist in LeadEngine
           </p>
         </CardContent>
       </Card>
 
-      <Card className="relative overflow-hidden group bg-white/80 border-slate-200/60 backdrop-blur-xl shadow-sm hover:border-emerald-300 transition-all duration-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/10">
+      {/* New */}
+      <Card className="relative overflow-hidden group bg-white/80 border-slate-200/60 backdrop-blur-xl shadow-sm hover:border-emerald-300 transition-all duration-300">
         <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-          <ShieldCheck className="w-24 h-24 text-emerald-600 -mr-6 -mt-6" />
+          <Sparkles className="w-24 h-24 text-emerald-600 -mr-6 -mt-6" />
         </div>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-          <CardTitle className="text-sm font-medium text-slate-500">Deduplication Rate</CardTitle>
-          <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600">
+          <CardTitle className="text-sm font-medium text-slate-500">New Discoveries</CardTitle>
+          <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
+            <Sparkles className="h-4 w-4" />
+          </div>
+        </CardHeader>
+        <CardContent className="relative z-10">
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{newLeads.toLocaleString()}</div>
+          <p className="text-xs font-medium text-emerald-600 mt-2">
+            Fresh companies added globally
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Duplicates Prevented */}
+      <Card className="relative overflow-hidden group bg-white/80 border-slate-200/60 backdrop-blur-xl shadow-sm hover:border-violet-300 transition-all duration-300">
+        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+          <ShieldCheck className="w-24 h-24 text-violet-600 -mr-6 -mt-6" />
+        </div>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+          <CardTitle className="text-sm font-medium text-slate-500">Duplicates Prevented</CardTitle>
+          <div className="p-2 rounded-lg bg-violet-50 text-violet-600">
             <ShieldCheck className="h-4 w-4" />
           </div>
         </CardHeader>
         <CardContent className="relative z-10">
-          <div className="text-3xl font-bold text-slate-900 tracking-tight">{dedupRate}%</div>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">{duplicates.toLocaleString()}</div>
           <p className="text-xs font-medium text-slate-500 mt-2">
-            {stats.totalAfterDedup.toLocaleString()} unique leads
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="relative overflow-hidden group bg-white/80 border-slate-200/60 backdrop-blur-xl shadow-sm hover:border-purple-300 transition-all duration-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-purple-500/10">
-        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-          <Activity className="w-24 h-24 text-purple-600 -mr-6 -mt-6" />
-        </div>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-          <CardTitle className="text-sm font-medium text-slate-500">Companies Created</CardTitle>
-          <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
-            <Activity className="h-4 w-4" />
-          </div>
-        </CardHeader>
-        <CardContent className="relative z-10">
-          <div className="text-3xl font-bold text-slate-900 tracking-tight">{stats.totalCompaniesCreated.toLocaleString()}</div>
-          <p className="text-xs font-medium text-slate-500 mt-2">
-            Added to orchestration pipeline
+            Resolved via Identity Engine
           </p>
         </CardContent>
       </Card>

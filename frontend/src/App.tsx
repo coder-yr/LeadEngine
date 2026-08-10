@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 
 // Public pages
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 
@@ -26,6 +27,7 @@ export function App() {
       <Router>
         <Routes>
           {/* Public routes */}
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 
@@ -36,7 +38,7 @@ export function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <Routes>
-                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/discovery" element={<Discovery />} />
                     <Route path="/companies" element={<Companies />} />
                     <Route path="/companies/:id" element={<CompanyDetails />} />
@@ -47,7 +49,7 @@ export function App() {
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/activities" element={<Activities />} />
                     <Route path="/tools/audit-tester" element={<WebsiteAuditTester />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </AppLayout>
               </ProtectedRoute>

@@ -18,7 +18,7 @@ export default function Signup() {
   const [requiresConfirmation, setRequiresConfirmation] = useState(false);
 
   if (!authLoading && user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   const validate = (): string | null => {
@@ -57,7 +57,7 @@ export default function Signup() {
       setRequiresConfirmation(true);
     } else {
       // Email confirmation disabled — user is immediately signed in
-      navigate('/', { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   };
 

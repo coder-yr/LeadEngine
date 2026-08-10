@@ -178,7 +178,7 @@ export class DiscoveryJobRepository {
   async getStats(userId?: string) {
     let query = supabase
       .from('discovery_jobs')
-      .select('status, total_raw_results, total_after_dedup, total_companies_created');
+      .select('status, total_raw_results, total_after_dedup, total_companies_created, total_new, total_existing, external_results');
 
     if (userId) {
       query = query.eq('user_id', userId);
@@ -198,7 +198,8 @@ export class DiscoveryJobRepository {
       runningJobs: jobs?.filter(j => j.status === 'running').length || 0,
       totalDiscovered: jobs?.reduce((sum, j) => sum + (j.total_raw_results || 0), 0) || 0,
       totalAfterDedup: jobs?.reduce((sum, j) => sum + (j.total_after_dedup || 0), 0) || 0,
-      totalCompaniesCreated: jobs?.reduce((sum, j) => sum + (j.total_companies_created || 0), 0) || 0,
+      totalNew: jobs?.reduce((sum, j) => sum + (j.total_new || j.total_companies_created || 0), 0) || 0,
+      totalExisting: jobs?.reduce((sum, j) => sum + (j.total_existing || 0), 0) || 0,
     };
 
     return stats;

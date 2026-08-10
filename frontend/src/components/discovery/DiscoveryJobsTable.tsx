@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
-import { Loader2, ChevronRight, Download, Trash2, CheckCircle2, XCircle, Clock, MapPin } from "lucide-react";
+import { Loader2, ChevronRight, Download, Trash2, CheckCircle2, XCircle, Clock, MapPin, Search } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,8 +60,12 @@ export function DiscoveryJobsTable({ jobs, onSelectJob, onRefresh }: DiscoveryJo
 
   if (jobs.length === 0) {
     return (
-      <div className="text-center p-8 text-muted-foreground bg-black/20 rounded-lg border border-white/5">
-        No discovery jobs yet. Start a new search above.
+      <div className="text-center p-12 text-slate-500 bg-white/50 backdrop-blur-md rounded-xl border border-slate-200/60 shadow-sm border-dashed">
+        <div className="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Search className="w-8 h-8 text-indigo-300" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-900 mb-1">No searches yet</h3>
+        <p className="text-sm">Start your first discovery run above to find new companies.</p>
       </div>
     );
   }

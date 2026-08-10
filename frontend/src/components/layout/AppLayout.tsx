@@ -21,7 +21,7 @@ import { UserMenu } from "./UserMenu";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Discover', href: '/discovery', icon: Search },
   { name: 'Companies', href: '/companies', icon: Building2 },
   { name: 'Contacts', href: '/leads', icon: Contact },
@@ -38,9 +38,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
-  // Match active route — use startsWith for sub-routes but exact for "/"
   const isActive = (href: string) => {
-    if (href === '/') return location.pathname === '/';
+    if (href === '/dashboard') return location.pathname === '/dashboard';
     return location.pathname.startsWith(href);
   };
 
@@ -59,58 +58,61 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       
       <div className="flex-1 overflow-y-auto py-4">
-        <nav className="grid gap-0.5 px-3">
-          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2 mt-2 px-2">
+        <nav className="grid gap-1 px-3">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 mt-2 px-3">
             Workspace
           </div>
-          {navigation.map((item) => (
-            <Link
-              key={item.name}
-              to={item.href}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={cn(
-                "flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150",
-                isActive(item.href)
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {item.name}
-            </Link>
-          ))}
+          {navigation.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-300",
+                  active
+                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/20"
+                    : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+                )}
+              >
+                <item.icon className={cn("h-4 w-4 shrink-0 transition-transform duration-300", active ? "text-white" : "text-slate-400")} />
+                {item.name}
+              </Link>
+            );
+          })}
           
-          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2 mt-6 px-2">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 mt-6 px-3">
             Tools
           </div>
           <Link
             to="/tools/audit-tester"
             onClick={() => setIsMobileMenuOpen(false)}
             className={cn(
-              "flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150",
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-300",
               location.pathname === "/tools/audit-tester"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/20"
+                : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
             )}
           >
-            <TestTubes className="h-4 w-4 shrink-0" />
+            <TestTubes className={cn("h-4 w-4 shrink-0", location.pathname === "/tools/audit-tester" ? "text-white" : "text-slate-400")} />
             Audit Tester
           </Link>
         </nav>
       </div>
 
-      <div className="p-3 border-t border-border/50 mt-auto">
+      <div className="p-4 border-t border-slate-200/50 mt-auto bg-slate-50/30">
         <Link
           to="/settings"
           onClick={() => setIsMobileMenuOpen(false)}
           className={cn(
-            "flex items-center gap-3 px-2.5 py-2 rounded-md text-sm font-medium transition-all duration-150",
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-300",
             location.pathname === "/settings"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/20"
+              : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
           )}
         >
-          <Settings className="h-4 w-4 shrink-0" />
+          <Settings className={cn("h-4 w-4 shrink-0", location.pathname === "/settings" ? "text-white" : "text-slate-400")} />
           Settings
         </Link>
       </div>
