@@ -5,6 +5,7 @@ import { DeduplicationService, RawDiscoveryRecord } from './DeduplicationService
 import { OrchestratorService } from '../orchestration/OrchestratorService.js';
 import { WebsiteNormalizationService } from './WebsiteNormalizationService.js';
 import { discoveryExecuteQueue } from '../orchestration/Queues.js';
+import { databaseDiscoveryService } from './DatabaseDiscoveryService.js';
 
 export interface DiscoveryRunnerOutput {
   status: string;
@@ -42,9 +43,31 @@ export class DiscoveryService {
     });
     const jobId = jobRecord.id;
 
-    // 2. Add job to execution queue
-    // userId is carried as correlation data — Python workers don't need to auth,
-    // they just pass it back so Node can authorize the completion handler.
+    // 2. Pre-flight DB Search
+    const localMatches = await databaseDiscoveryService.searchLocalDatabase(input.keyword);
+    let databaseMatches = 0;
+    
+    if (localMatches.length > 0) {
+      databaseMatches = localMatches.length;
+      
+      const localResultInputs: DiscoveryResultInput[] = localMatches.map(c => ({
+        job_id: jobId,
+        source: 'LeadEngine Database',
+        company_id: c.id,
+        raw_name: c.name,
+        raw_phone: c.phone || undefined,
+        raw_email: c.email || undefined,
+        raw_website: c.website_url || undefined,
+        raw_address: c.city ? `${c.city}, ${c.state_province || ''}`.trim() : undefined,
+        result_type: 'EXISTING',
+        discovered_now: false,
+        raw_data: c
+      }));
+      
+      await this.resultRepo.bulkInsert(localResultInputs);
+    }
+
+    // 3. Add job to execution queue for external discovery
     const payload = {
       jobId,
       userId: input.userId || null,
@@ -57,9 +80,11 @@ export class DiscoveryService {
     
     await discoveryExecuteQueue.add('run-discovery', payload);
     
-    // Update status to running
+    // Update status to running with pre-flight stats
     await this.jobRepo.updateStatus(jobId, {
       status: 'running',
+      database_matches: databaseMatches,
+      total_existing: databaseMatches,
       started_at: new Date().toISOString(),
     });
 
@@ -144,6 +169,7 @@ export class DiscoveryService {
     let companiesCreated = 0;
     let attemptedCompanies = 0;
     let skippedCompanies = 0;
+    let existingLinked = 0;
     let skipReasons: Record<string, number> = {};
     
     const existingCompanies = await this.companyRepo.getAllCompanies();
@@ -155,13 +181,20 @@ export class DiscoveryService {
 
         if (match) {
           skippedCompanies++;
+          existingLinked++;
           const reasonKey = `${match.reason} (DeduplicationService)`;
           skipReasons[reasonKey] = (skipReasons[reasonKey] || 0) + 1;
 
-          await this.resultRepo.linkCompany(record.id, match.company.id, {
-            match_confidence: match.confidence,
-            matched_existing: true
-          });
+          await this.resultRepo.linkCompany(
+            record.id, 
+            match.company.id, 
+            {
+              match_confidence: match.confidence,
+              matched_existing: true
+            },
+            'EXISTING',
+            false
+          );
         } else {
           const company = await this.companyRepo.create({
             name: record.raw_name || 'Unknown',
@@ -172,16 +205,23 @@ export class DiscoveryService {
             discovery_source: record.source,
           });
 
-          await this.resultRepo.linkCompany(record.id, company.id, {
-            match_confidence: 1.0,
-            is_new_company: true
-          });
+          await this.resultRepo.linkCompany(
+            record.id, 
+            company.id, 
+            {
+              match_confidence: 1.0,
+              is_new_company: true
+            },
+            'NEW',
+            true
+          );
           
           existingCompanies.push(company);
           companiesCreated++;
 
-          // 5. Start orchestration workflow for each new company
-          await OrchestratorService.startCompanyWorkflow(company.id);
+          // Phase 2: MANUAL ANALYSIS BOUNDARY. 
+          // Do NOT automatically start the orchestration workflow.
+          // Users must explicitly click "Analyze" in the UI.
         }
       } catch (err: any) {
         skippedCompanies++;
@@ -192,9 +232,13 @@ export class DiscoveryService {
     }
 
     // 6. Update job as completed
+    const currentJobStats = await this.jobRepo.getById(jobId);
     await this.jobRepo.updateStatus(jobId, {
       status: 'completed',
       total_companies_created: companiesCreated,
+      external_results: insertedResults.length,
+      total_new: companiesCreated,
+      total_existing: (currentJobStats?.database_matches || 0) + existingLinked,
       completed_at: new Date().toISOString(),
     });
   }

@@ -3,6 +3,7 @@ import { supabase } from '../../config/supabase.js';
 export interface DiscoveryResultInput {
   job_id: string;
   source: string;
+  company_id?: string;
   raw_name?: string;
   raw_phone?: string;
   raw_email?: string;
@@ -10,6 +11,8 @@ export interface DiscoveryResultInput {
   raw_address?: string;
   raw_rating?: string;
   raw_data?: Record<string, any>;
+  result_type?: 'EXISTING' | 'NEW';
+  discovered_now?: boolean;
 }
 
 export class DiscoveryResultRepository {
@@ -92,8 +95,17 @@ export class DiscoveryResultRepository {
     }
   }
 
-  async linkCompany(resultId: string, companyId: string, extraData?: Record<string, any>) {
+  async linkCompany(
+    resultId: string, 
+    companyId: string, 
+    extraData?: Record<string, any>,
+    resultType?: 'EXISTING' | 'NEW',
+    discoveredNow?: boolean
+  ) {
     let updatePayload: any = { company_id: companyId };
+
+    if (resultType) updatePayload.result_type = resultType;
+    if (discoveredNow !== undefined) updatePayload.discovered_now = discoveredNow;
 
     if (extraData) {
       // fetch current raw_data to merge

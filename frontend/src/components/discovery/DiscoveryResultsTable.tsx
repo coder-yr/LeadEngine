@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface DiscoveryResult {
   id: string;
@@ -14,6 +15,8 @@ interface DiscoveryResult {
   raw_website: string;
   raw_address: string;
   is_duplicate: boolean;
+  result_type?: 'EXISTING' | 'NEW';
+  discovered_now?: boolean;
   companies?: {
     id: string;
     name: string;
@@ -31,14 +34,22 @@ interface DiscoveryResultsTableProps {
 
 export function DiscoveryResultsTable({ results, onBulkAnalyze }: DiscoveryResultsTableProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<string>("all");
 
   const uniqueResults = results.filter(r => !r.is_duplicate);
+  
+  const filteredResults = uniqueResults.filter(r => {
+    if (activeTab === "all") return true;
+    if (activeTab === "new") return r.result_type === "NEW";
+    if (activeTab === "existing") return r.result_type === "EXISTING";
+    return true;
+  });
 
   const toggleAll = () => {
-    if (selectedIds.size === uniqueResults.length) {
+    if (selectedIds.size === filteredResults.length && filteredResults.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(uniqueResults.map(r => r.id)));
+      setSelectedIds(new Set(filteredResults.map(r => r.id)));
     }
   };
 
@@ -64,17 +75,21 @@ export function DiscoveryResultsTable({ results, onBulkAnalyze }: DiscoveryResul
     return <div className="p-8 text-center text-muted-foreground">No unique results found.</div>;
   }
 
+  const newCount = uniqueResults.filter(r => r.result_type === 'NEW').length;
+  const existingCount = uniqueResults.filter(r => r.result_type === 'EXISTING').length;
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-white/80 p-4 rounded-xl border border-slate-200/60 backdrop-blur-xl shadow-sm relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-100/50 to-transparent pointer-events-none" />
         <div className="text-sm relative z-10 flex items-center gap-3">
-          <span className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold">
-            {selectedIds.size}
-          </span>
-          <span className="text-slate-600">
-            selected of <span className="text-slate-900 font-bold">{uniqueResults.length}</span> unique leads
-          </span>
+          <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setSelectedIds(new Set()); }} className="w-[400px]">
+            <TabsList>
+              <TabsTrigger value="all">All ({uniqueResults.length})</TabsTrigger>
+              <TabsTrigger value="new">New ({newCount})</TabsTrigger>
+              <TabsTrigger value="existing">Existing ({existingCount})</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         <Button 
           onClick={handleBulkAnalyze}
@@ -92,7 +107,7 @@ export function DiscoveryResultsTable({ results, onBulkAnalyze }: DiscoveryResul
             <TableRow className="hover:bg-transparent">
               <TableHead className="w-12 text-slate-500 font-semibold">
                 <Checkbox 
-                  checked={selectedIds.size === uniqueResults.length && uniqueResults.length > 0}
+                  checked={selectedIds.size === filteredResults.length && filteredResults.length > 0}
                   onCheckedChange={toggleAll}
                   aria-label="Select all"
                   className="data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 transition-all"
@@ -119,7 +134,7 @@ export function DiscoveryResultsTable({ results, onBulkAnalyze }: DiscoveryResul
               </TableRow>
             ) : (
               <>
-                {uniqueResults.map((r) => {
+                {filteredResults.map((r) => {
                   const companyId = r.companies?.id;
                   const isSelected = selectedIds.has(r.id);
                   const score = r.companies?.lead_score || 0;
@@ -134,8 +149,20 @@ export function DiscoveryResultsTable({ results, onBulkAnalyze }: DiscoveryResul
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate max-w-[400px]" title={r.companies?.name || r.raw_name}>
-                          {r.companies?.name || r.raw_name}
+                        <div className="flex items-center gap-2">
+                          <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate max-w-[300px]" title={r.companies?.name || r.raw_name}>
+                            {r.companies?.name || r.raw_name}
+                          </div>
+                          {r.result_type === 'EXISTING' && (
+                            <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 border-indigo-200">
+                              Database
+                            </Badge>
+                          )}
+                          {r.result_type === 'NEW' && (
+                            <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 border-emerald-200">
+                              New Lead
+                            </Badge>
+                          )}
                         </div>
                         {r.raw_address && (
                           <div className="flex items-start text-xs text-slate-500 mt-1.5 line-clamp-2 max-w-[400px]" title={r.raw_address}>

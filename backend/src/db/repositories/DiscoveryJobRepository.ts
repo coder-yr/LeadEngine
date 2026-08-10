@@ -13,6 +13,10 @@ export interface DiscoveryJobUpdate {
   total_raw_results?: number;
   total_after_dedup?: number;
   total_companies_created?: number;
+  database_matches?: number;
+  external_results?: number;
+  total_existing?: number;
+  total_new?: number;
   error_message?: string;
   per_source_counts?: Record<string, number>;
   started_at?: string;

@@ -2,8 +2,13 @@ import asyncio
 import logging
 import os
 import traceback
+import sys
 from typing import Dict
 from bullmq import Worker, Queue, Job
+
+if sys.platform == 'win32':
+    # Playwright requires ProactorEventLoop to spawn subprocesses
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from tasks.base_task import PythonTask
 from tasks.discovery_task import DiscoveryTask

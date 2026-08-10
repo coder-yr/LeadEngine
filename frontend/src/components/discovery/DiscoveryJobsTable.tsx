@@ -13,6 +13,10 @@ interface DiscoveryJob {
   status: 'pending' | 'running' | 'completed' | 'failed';
   total_raw_results: number;
   total_after_dedup: number;
+  total_new?: number;
+  total_existing?: number;
+  database_matches?: number;
+  external_results?: number;
   created_at: string;
   per_source_counts: Record<string, number>;
 }
@@ -70,7 +74,7 @@ export function DiscoveryJobsTable({ jobs, onSelectJob, onRefresh }: DiscoveryJo
             <TableHead className="text-slate-600 font-semibold">Target</TableHead>
             <TableHead className="text-slate-600 font-semibold">Status</TableHead>
             <TableHead className="text-slate-600 font-semibold">Sources</TableHead>
-            <TableHead className="text-right text-slate-600 font-semibold">Results (Deduped)</TableHead>
+            <TableHead className="text-right text-slate-600 font-semibold">Leads (New/Existing)</TableHead>
             <TableHead className="text-slate-600 font-semibold">Age</TableHead>
             <TableHead className="text-right text-slate-600 font-semibold">Actions</TableHead>
           </TableRow>
@@ -100,8 +104,11 @@ export function DiscoveryJobsTable({ jobs, onSelectJob, onRefresh }: DiscoveryJo
                 </div>
               </TableCell>
               <TableCell className="text-right">
-                <div className="font-bold text-emerald-600">{job.total_after_dedup}</div>
-                <div className="text-xs text-slate-500 mt-0.5">from {job.total_raw_results} raw</div>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="font-bold text-emerald-600">{job.total_new || 0} New</div>
+                  <div className="text-xs text-indigo-500 font-medium">{job.total_existing || 0} Existing</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">from {job.total_raw_results} raw</div>
+                </div>
               </TableCell>
               <TableCell className="text-slate-500 text-sm">
                 <div className="flex items-center gap-1.5">
