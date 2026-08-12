@@ -39,11 +39,18 @@ const app: Express = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // ─── CORS ──────────────────────────────────────────────────────────────────
+const parseOrigins = (envVar?: string): string[] => {
+  if (!envVar) return [];
+  return envVar.split(',').map((s) => s.trim()).filter(Boolean);
+};
+
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
+  ...parseOrigins(process.env.FRONTEND_URL),
+  ...parseOrigins(process.env.CORS_ORIGIN),
   'http://localhost:5173',
   'http://localhost:4173',
-].filter(Boolean) as string[];
+  'https://lead-engine-frontend-ihi9.vercel.app'
+];
 
 app.use(cors({
   origin: (origin, callback) => {

@@ -238,7 +238,7 @@ class DiscoverySourceManager:
                 
                 t4_outputs = await asyncio.gather(
                     self._run_tier(
-                        tier4_sources, keyword, city, target_count, 900, 
+                        tier4_sources, keyword, city, target_count, 120, 
                         discovered_companies=discovered_companies,
                         coverage_score=coverage_score
                     )

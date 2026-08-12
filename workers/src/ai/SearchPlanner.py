@@ -21,53 +21,36 @@ class SearchPlanner:
         if "dentist" in kw or "dental" in kw:
             return [
                 base,
-                f"Dental Clinic {city}",
-                f"Orthodontist {city}",
-                f"Cosmetic Dentist {city}",
-                f"Smile Design {city}"
+                f"Dental Clinic {city}"
             ]
         elif "hotel" in kw:
             return [
                 base,
-                f"Boutique Hotel {city}",
-                f"Luxury Resort {city}",
-                f"Budget Accommodation {city}"
+                f"Boutique Hotel {city}"
             ]
         elif "lawyer" in kw or "advocate" in kw or "law firm" in kw:
             return [
                 base,
-                f"Law Firm {city}",
-                f"Corporate Lawyer {city}",
-                f"Legal Consultants {city}"
+                f"Law Firm {city}"
             ]
         elif "restaurant" in kw or "cafe" in kw:
             return [
                 base,
-                f"Fine Dining {city}",
-                f"Bistro {city}",
                 f"Top rated restaurants {city}"
             ]
         elif "gym" in kw or "fitness" in kw:
             return [
                 base,
-                f"Fitness Center {city}",
-                f"Crossfit {city}",
-                f"Personal Trainer {city}"
+                f"Fitness Center {city}"
             ]
         elif "ca " in kw or "chartered accountant" in kw:
             return [
                 base,
-                f"Accounting Firm {city}",
-                f"Tax Consultants {city}",
-                f"Auditors {city}"
+                f"Accounting Firm {city}"
             ]
             
         # Default fallback expands with typical prefixes/suffixes to trigger more SERPs
         return [
             base, 
-            f"Best {keyword} in {city}", 
-            f"Top {keyword} agencies {city}",
-            f"Independent {keyword} {city}",
-            f"List of {keyword} companies {city}",
-            f"{city} {keyword} directory official website"
+            f"Top {keyword} in {city}"
         ]

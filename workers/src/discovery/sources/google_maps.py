@@ -31,11 +31,12 @@ from discovery.anti_block import (
 logger = logging.getLogger(__name__)
 
 # Scrolling config
-SCROLL_PAUSE_MS = 2000
-MAX_SCROLL_STALLS = 4          # Stop after N consecutive scrolls with 0 new listings
-MAX_SCROLL_ABSOLUTE = 40       # Hard ceiling to prevent infinite loops
-LISTING_CLICK_TIMEOUT = 1500   # ms to wait for side panel after click
-PANEL_LOAD_WAIT = 1200         # ms to wait for panel data to render
+SCROLL_PAUSE_MS = 1000
+MAX_SCROLL_STALLS = 3          # Stop after N consecutive scrolls with 0 new listings
+MAX_SCROLL_ABSOLUTE = 10       # Hard ceiling to prevent infinite loops
+LISTING_CLICK_TIMEOUT = 1000   # ms to wait for side panel after click
+PANEL_LOAD_WAIT = 500         # ms to wait for panel data to render
+MAX_EXECUTION_TIME = 90        # hard limit for google maps in seconds
 
 
 class GoogleMapsSource(BaseDiscoverySource):
@@ -47,6 +48,7 @@ class GoogleMapsSource(BaseDiscoverySource):
         query = urllib.parse.quote(f"{keyword} {city}")
         url = f"https://www.google.com/maps/search/{query}"
         extracted: List[DiscoveryRecord] = []
+        start_time = asyncio.get_event_loop().time()
 
         for attempt in range(3):
             try:
@@ -87,6 +89,10 @@ class GoogleMapsSource(BaseDiscoverySource):
 
                         for scroll_num in range(MAX_SCROLL_ABSOLUTE):
                             if len(extracted) >= max_results:
+                                break
+                                
+                            if asyncio.get_event_loop().time() - start_time > MAX_EXECUTION_TIME:
+                                logger.info(f"[google_maps] Reached {MAX_EXECUTION_TIME}s time limit. Returning {len(extracted)} results.")
                                 break
 
                             # Process currently rendered listings
@@ -136,8 +142,8 @@ class GoogleMapsSource(BaseDiscoverySource):
                                 logger.info(f"[google_maps] End of results reached at scroll {scroll_num + 1}")
                                 break
 
-                        if extracted:
-                            break  # Success — no need to retry
+                        if extracted or asyncio.get_event_loop().time() - start_time > MAX_EXECUTION_TIME:
+                            break  # Success or timeout — no need to retry
 
                     finally:
                         await browser.close()
@@ -195,7 +201,7 @@ class GoogleMapsSource(BaseDiscoverySource):
             new_page = await context.new_page()
             
             try:
-                await new_page.goto(href, wait_until="domcontentloaded", timeout=10000)
+                await new_page.goto(href, wait_until="domcontentloaded", timeout=4000)
                 await new_page.wait_for_timeout(PANEL_LOAD_WAIT)
                 
                 # Rating (fallback)
