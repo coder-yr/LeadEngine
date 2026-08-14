@@ -54,12 +54,12 @@ export default function Landing() {
       <main className="relative z-10">
         
         {/* HERO SECTION */}
-        <section className="pt-24 pb-32 px-6 text-center max-w-5xl mx-auto">
+        <section className="pt-24 pb-32 px-6 text-center max-w-7xl mx-auto">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-sm font-medium mb-8">
             <SparklesIcon className="w-4 h-4" />
             Introducing LeadEngine V3
           </div>
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 mb-8 leading-[1.1]">
+          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 mb-8 leading-[1.1] max-w-5xl mx-auto">
             Find your next customer <br />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 animate-gradient-x">
               before your competitors do.
@@ -89,41 +89,18 @@ export default function Landing() {
             </Button>
           </div>
 
-          {/* Hero Visual Mockup */}
-          <div className="mt-20 relative mx-auto max-w-4xl">
-            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur-2xl opacity-20" />
-            <div className="relative rounded-2xl border border-slate-200/60 bg-white/80 backdrop-blur-xl shadow-2xl p-2 overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-400" />
-                  <div className="w-3 h-3 rounded-full bg-amber-400" />
-                  <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                </div>
-                <div className="mx-auto bg-white border border-slate-200 rounded-md px-3 py-1 flex items-center gap-2 w-64">
-                  <Search className="w-3 h-3 text-slate-400" />
-                  <span className="text-[10px] text-slate-400">Discovering: "Marketing Agencies in London"</span>
-                </div>
-              </div>
-              <div className="p-8 pb-12 bg-slate-50/30 flex flex-col items-center justify-center">
-                <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
-                <h3 className="font-bold text-slate-900">Scanning the web...</h3>
-                <p className="text-sm text-slate-500 mt-2">Found 142 new prospects. Analyzing websites...</p>
-                
-                <div className="w-full max-w-2xl mt-8 space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-100 shadow-sm animate-pulse-fade" style={{ animationDelay: `${i * 150}ms` }}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-100" />
-                        <div className="space-y-2">
-                          <div className="w-32 h-4 bg-slate-100 rounded-full" />
-                          <div className="w-24 h-3 bg-slate-50 rounded-full" />
-                        </div>
-                      </div>
-                      <div className="w-16 h-6 bg-indigo-50 rounded-full" />
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* Hero Visual Video */}
+          <div className="mt-20 relative mx-auto w-full max-w-6xl z-40 transform hover:scale-[1.01] transition-transform duration-500">
+            <div className="absolute -inset-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 rounded-[2rem] blur-3xl opacity-20 animate-pulse" />
+            <div className="relative rounded-2xl shadow-2xl overflow-hidden ring-1 ring-white/20">
+              <video 
+                src="/discovery_demo.mp4" 
+                autoPlay 
+                loop 
+                muted 
+                playsInline 
+                className="w-full h-auto rounded-2xl brightness-[1.15] contrast-[1.05] saturate-110"
+              />
             </div>
           </div>
         </section>
